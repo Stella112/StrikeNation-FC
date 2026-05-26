@@ -60,6 +60,73 @@ const liveFixtures = [
   },
 ];
 
+const formationDots = [
+  { side: "home", role: "GK", x: 9, y: 50 },
+  { side: "home", role: "LB", x: 20, y: 24 },
+  { side: "home", role: "CB", x: 24, y: 43 },
+  { side: "home", role: "CB", x: 24, y: 58 },
+  { side: "home", role: "RB", x: 20, y: 76 },
+  { side: "home", role: "CM", x: 38, y: 35 },
+  { side: "home", role: "CM", x: 42, y: 52 },
+  { side: "home", role: "AM", x: 38, y: 68 },
+  { side: "home", role: "LW", x: 53, y: 25 },
+  { side: "home", role: "ST", x: 58, y: 50 },
+  { side: "home", role: "RW", x: 53, y: 76 },
+  { side: "away", role: "GK", x: 91, y: 50 },
+  { side: "away", role: "LB", x: 80, y: 24 },
+  { side: "away", role: "CB", x: 76, y: 43 },
+  { side: "away", role: "CB", x: 76, y: 58 },
+  { side: "away", role: "RB", x: 80, y: 76 },
+  { side: "away", role: "CM", x: 62, y: 35 },
+  { side: "away", role: "CM", x: 58, y: 52 },
+  { side: "away", role: "AM", x: 62, y: 68 },
+  { side: "away", role: "LW", x: 47, y: 25 },
+  { side: "away", role: "ST", x: 42, y: 50 },
+  { side: "away", role: "RW", x: 47, y: 76 },
+];
+
+function playMatchSound(kind) {
+  if (typeof window === "undefined") return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+
+  const context = new AudioContext();
+  const master = context.createGain();
+  master.gain.setValueAtTime(0.08, context.currentTime);
+  master.connect(context.destination);
+
+  function tone(frequency, start, duration, type = "sine", volume = 1) {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, context.currentTime + start);
+    gain.gain.setValueAtTime(0.0001, context.currentTime + start);
+    gain.gain.exponentialRampToValueAtTime(volume, context.currentTime + start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + start + duration);
+    oscillator.connect(gain);
+    gain.connect(master);
+    oscillator.start(context.currentTime + start);
+    oscillator.stop(context.currentTime + start + duration + 0.03);
+  }
+
+  if (kind === "whistle") {
+    tone(1600, 0, 0.16, "square", 0.55);
+    tone(1900, 0.18, 0.22, "square", 0.5);
+  } else if (kind === "kick") {
+    tone(95, 0, 0.12, "triangle", 0.8);
+    tone(260, 0.03, 0.08, "sine", 0.35);
+  } else if (kind === "goal") {
+    tone(520, 0, 0.12, "sawtooth", 0.4);
+    tone(660, 0.12, 0.16, "sawtooth", 0.38);
+    tone(880, 0.3, 0.28, "sawtooth", 0.34);
+  } else if (kind === "save") {
+    tone(180, 0, 0.18, "triangle", 0.55);
+    tone(120, 0.16, 0.2, "triangle", 0.45);
+  }
+
+  window.setTimeout(() => context.close(), 900);
+}
+
 function shortAddress(address) {
   return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected";
 }
@@ -253,6 +320,10 @@ export default function StrikeNationClient() {
   const [joinMatchId, setJoinMatchId] = useState("");
   const [battleMode, setBattleMode] = useState("quick");
   const [lastMatch, setLastMatch] = useState(null);
+  const [commentaryFeed, setCommentaryFeed] = useState([
+    "The arena is quiet for now. Pick a country, trust the AI Captain, and wait for the whistle.",
+  ]);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [selectedFixture, setSelectedFixture] = useState(liveFixtures[0]);
   const [liveMarketId, setLiveMarketId] = useState("");
   const [livePick, setLivePick] = useState(0);
@@ -298,6 +369,30 @@ export default function StrikeNationClient() {
     [selectedCountry.id],
   );
   const isMatchBusy = ["quick-battle", "court-create", "court-join", "court-settle"].includes(busy);
+
+  function addCommentary(line) {
+    setCommentaryFeed((current) => [line, ...current].slice(0, 5));
+  }
+
+  function playSound(kind) {
+    if (soundEnabled) playMatchSound(kind);
+  }
+
+  useEffect(() => {
+    if (!isMatchBusy) return undefined;
+    const lines = [
+      `${agent?.name || "Your striker"} scans the keeper and waits for the AI signal.`,
+      `${selectedCountry.name} FanDAO pushes higher. The midfield dots are squeezing the lane.`,
+      `The ball is moving quickly now. ${aiOpponent.name} AI is trying to read the shot.`,
+      `Claude's tactical call is live: ${recommendation.direction} with ${recommendation.power} power.`,
+    ];
+    let index = 0;
+    const interval = window.setInterval(() => {
+      addCommentary(lines[index % lines.length]);
+      index += 1;
+    }, 2400);
+    return () => window.clearInterval(interval);
+  }, [agent?.name, aiOpponent.name, isMatchBusy, recommendation.direction, recommendation.power, selectedCountry.name]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(profileKey(address));
@@ -452,6 +547,8 @@ export default function StrikeNationClient() {
   async function runQuickBattle() {
     if (!canTransact || !agent) return;
     setBusy("quick-battle");
+    playSound("whistle");
+    addCommentary(`Whistle goes. ${agent.name} leads ${selectedCountry.name} into a Quick Battle against ${aiOpponent.name} AI.`);
     setLastMatch({
       mode: "quick",
       phase: "Agents entering the pitch",
@@ -479,6 +576,8 @@ export default function StrikeNationClient() {
         chainId: xLayer.id,
       });
       setPendingHash(hash);
+      playSound("kick");
+      addCommentary("The shot is away. Now the chain settles the duel.");
       setLastMatch((current) => ({ ...current, phase: "Shot submitted on X Layer" }));
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       const result = parseAgentMatchResult(receipt) || parseBattleResult(receipt);
@@ -508,6 +607,12 @@ export default function StrikeNationClient() {
         scoreAway: result?.scoreAgent,
         won,
       });
+      playSound(won ? "goal" : "save");
+      addCommentary(
+        won
+          ? `Goal. ${selectedCountry.name} takes it ${result?.scoreUser ?? "-"}-${result?.scoreAgent ?? "-"} and the crowd wakes up.`
+          : `Saved. ${aiOpponent.name} AI reads the strike and steals the moment.`,
+      );
       const scoreLine =
         result?.scoreUser !== undefined ? ` ${selectedCountry.name} ${result.scoreUser}-${result.scoreAgent} ${aiOpponent.name} AI.` : "";
       setMessage(`${agent.name} finished a Quick Battle against ${aiOpponent.name} AI.${scoreLine} ${hash}`);
@@ -522,6 +627,8 @@ export default function StrikeNationClient() {
   async function createCourtMatch() {
     if (!canTransact || !agent?.id) return;
     setBusy("court-create");
+    playSound("whistle");
+    addCommentary(`${profile.name} opens a Challenge Player court. Waiting for a rival wallet to step in.`);
     const strategyHash = keccak256(
       encodePacked(
         ["string", "uint256"],
@@ -542,6 +649,7 @@ export default function StrikeNationClient() {
       setCourtMatchId(String(matchId));
       setJoinMatchId(String(matchId));
     }
+    addCommentary(`Court Match #${matchId || "new"} is live. Share the ID and bring in the second wallet.`);
     setMessage(`Court match created. Share Match ID ${matchId || "from explorer"} with a second wallet. ${hash}`);
     setBusy("");
   }
@@ -549,6 +657,8 @@ export default function StrikeNationClient() {
   async function joinCourtMatch() {
     if (!canTransact || !agent?.id || !joinMatchId) return;
     setBusy("court-join");
+    playSound("whistle");
+    addCommentary(`${profile.name} joins Court Match #${joinMatchId}. Both squads are locked in.`);
     const strategyHash = keccak256(
       encodePacked(
         ["string", "uint256"],
@@ -565,6 +675,7 @@ export default function StrikeNationClient() {
     setPendingHash(hash);
     await publicClient.waitForTransactionReceipt({ hash });
     setCourtMatchId(joinMatchId);
+    addCommentary(`Second wallet confirmed. Court Match #${joinMatchId} can now be settled.`);
     setMessage(`Second wallet joined Court Match #${joinMatchId}. Now either wallet can settle the autonomous agent battle. ${hash}`);
     setBusy("");
   }
@@ -573,6 +684,8 @@ export default function StrikeNationClient() {
     const matchId = courtMatchId || joinMatchId;
     if (!canTransact || !matchId) return;
     setBusy("court-settle");
+    playSound("kick");
+    addCommentary(`Court Match #${matchId} is settling. The dots collapse into the box.`);
     setLastMatch({
       mode: "pvp",
       phase: "PvP agents settling the court",
@@ -618,6 +731,12 @@ export default function StrikeNationClient() {
           scoreAway: result.scoreB,
           won: userWon,
         });
+        playSound(userWon ? "goal" : "save");
+        addCommentary(
+          userWon
+            ? `Full-time on-chain. Your squad wins ${result.scoreA}-${result.scoreB}.`
+            : `Full-time on-chain. Rival wallet takes it ${result.scoreA}-${result.scoreB}.`,
+        );
         setMessage(`Court Match #${matchId} settled autonomously: ${result.scoreA}-${result.scoreB}. ${hash}`);
       } else {
         setMessage(`Court Match #${matchId} settled on X Layer. ${hash}`);
@@ -1158,6 +1277,18 @@ export default function StrikeNationClient() {
               <div className="goal goal-right">Goal</div>
               <div className="center-circle"></div>
               <div className="shot-trail"></div>
+              <div className="formation-layer" aria-hidden="true">
+                {formationDots.map((dot, index) => (
+                  <span
+                    key={`${dot.side}-${dot.role}-${index}`}
+                    className={`player-dot ${dot.side}`}
+                    style={{ left: `${dot.x}%`, top: `${dot.y}%`, "--delay": `${(index % 6) * 0.18}s` }}
+                    title={dot.role}
+                  >
+                    <i></i>
+                  </span>
+                ))}
+              </div>
               <div className="agent-piece agent-home">
                 <span>{profile.avatar || selectedCountry.flag}</span>
                 <strong>{agent?.name || "Your Agent"}</strong>
@@ -1180,6 +1311,22 @@ export default function StrikeNationClient() {
                   <span>{lastMatch.away}</span>
                 </div>
               )}
+            </div>
+            <div className="commentary-box">
+              <div className="commentary-head">
+                <div>
+                  <span className="eyebrow">Live commentary</span>
+                  <strong>{isMatchBusy ? "Broadcast is live" : "Match desk"}</strong>
+                </div>
+                <button type="button" className="sound-toggle" onClick={() => setSoundEnabled((current) => !current)}>
+                  {soundEnabled ? "Sound on" : "Sound off"}
+                </button>
+              </div>
+              <div className="commentary-lines">
+                {commentaryFeed.map((line, index) => (
+                  <p key={`${line}-${index}`}>{line}</p>
+                ))}
+              </div>
             </div>
             <div className="match-card">
               <div className="team-block">

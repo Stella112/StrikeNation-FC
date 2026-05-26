@@ -843,6 +843,75 @@ select:focus {
   animation: shotTrail 1.05s ease-in-out infinite;
 }
 
+.formation-layer {
+  position: absolute;
+  inset: 22px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.player-dot {
+  position: absolute;
+  width: 16px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+}
+
+.player-dot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 2px rgba(8, 9, 7, 0.42);
+}
+
+.player-dot i {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 2px;
+  height: 10px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.player-dot i::before,
+.player-dot i::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 10px;
+  height: 2px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.player-dot i::before {
+  top: 2px;
+}
+
+.player-dot i::after {
+  bottom: 0;
+}
+
+.player-dot.home {
+  color: var(--gold);
+}
+
+.player-dot.away {
+  color: #f5f0e1;
+}
+
+.is-battling .player-dot {
+  animation: playerPulse 1.6s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
 .court-score {
   position: absolute;
   left: 50%;
@@ -891,6 +960,58 @@ select:focus {
   align-items: end;
   gap: 10px;
   margin-top: 14px;
+}
+
+.commentary-box {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(244, 201, 93, 0.22);
+  border-radius: 8px;
+  background: rgba(244, 201, 93, 0.06);
+}
+
+.commentary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.commentary-head strong {
+  display: block;
+  margin-top: 3px;
+}
+
+.sound-toggle {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid rgba(250, 246, 232, 0.18);
+  border-radius: 8px;
+  background: rgba(8, 9, 7, 0.64);
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.commentary-lines {
+  display: grid;
+  gap: 7px;
+}
+
+.commentary-lines p {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: rgba(8, 9, 7, 0.48);
+  color: #eee5ca;
+  line-height: 1.4;
+}
+
+.commentary-lines p:first-child {
+  color: var(--gold);
+  font-weight: 800;
 }
 
 .premium-scout {
@@ -1142,6 +1263,19 @@ select:focus {
   }
 }
 
+@keyframes playerPulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  35% {
+    transform: translate(calc(-50% + 5px), calc(-50% - 4px));
+  }
+  70% {
+    transform: translate(calc(-50% - 4px), calc(-50% + 3px));
+  }
+}
+
 @media (max-width: 1120px) {
   .sidebar {
     position: static;
@@ -1214,6 +1348,7 @@ select:focus {
   }
 
   .section-head,
+  .commentary-head,
   .share-panel {
     align-items: stretch;
     flex-direction: column;

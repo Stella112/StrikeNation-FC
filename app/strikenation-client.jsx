@@ -208,6 +208,7 @@ export default function StrikeNationClient() {
   const [courtMatchId, setCourtMatchId] = useState("");
   const [joinMatchId, setJoinMatchId] = useState("");
   const [battleMode, setBattleMode] = useState("quick");
+  const [lastMatch, setLastMatch] = useState(null);
   const [premiumScout, setPremiumScout] = useState(null);
 
   const { data: passportId, refetch: refetchPassport } = useReadContract({
@@ -248,6 +249,7 @@ export default function StrikeNationClient() {
     () => countries.find((country) => country.name === "Brazil" && country.id !== selectedCountry.id) || countries.find((country) => country.id !== selectedCountry.id),
     [selectedCountry.id],
   );
+  const isMatchBusy = ["quick-battle", "court-create", "court-join", "court-settle"].includes(busy);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(profileKey(address));
@@ -402,48 +404,71 @@ export default function StrikeNationClient() {
   async function runQuickBattle() {
     if (!canTransact || !agent) return;
     setBusy("quick-battle");
+    setLastMatch({
+      mode: "quick",
+      phase: "Agents entering the pitch",
+      home: selectedCountry.name,
+      away: `${aiOpponent.name} AI`,
+    });
     if (!agent.id) {
       setMessage("Agent mint is confirmed, but its ID was not found yet. Refresh and deploy a new agent for a clean battle run.");
       setBusy("");
       return;
     }
-    const strategyHash = keccak256(
-      encodePacked(
-        ["string", "uint256"],
-        [`${agent.name}:${agent.style}:${shotPlan}:${recommendation.reason}`, BigInt(Date.now())],
-      ),
-    );
-    const hash = await writeContractAsync({
-      address: contracts.StrikeNationArena,
-      abi: arenaAbi,
-      functionName: "battleAgent",
-      args: [BigInt(agent.id), aiOpponent.id, strategyHash, recommendation.power, marketPick === "YES"],
-      chainId: xLayer.id,
-    });
-    setPendingHash(hash);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    const result = parseAgentMatchResult(receipt) || parseBattleResult(receipt);
-    const won = result?.won ?? false;
-    const points = result?.points ?? (won ? 187 : 55);
-    setScores((current) =>
-      current.map((country) =>
-        country.id === selectedCountry.id ? { ...country, score: country.score + points } : country,
-      ),
-    );
-    setAgent((current) =>
-      current
-        ? {
-            ...current,
-            wins: current.wins + (won ? 1 : 0),
-            losses: current.losses + (won ? 0 : 1),
-            level: won ? "Silver" : current.level,
-          }
-        : current,
-    );
-    const scoreLine =
-      result?.scoreUser !== undefined ? ` ${selectedCountry.name} ${result.scoreUser}-${result.scoreAgent} ${aiOpponent.name} AI.` : "";
-    setMessage(`${agent.name} finished a Quick Battle against ${aiOpponent.name} AI.${scoreLine} ${hash}`);
-    setBusy("");
+    try {
+      const strategyHash = keccak256(
+        encodePacked(
+          ["string", "uint256"],
+          [`${agent.name}:${agent.style}:${shotPlan}:${recommendation.reason}`, BigInt(Date.now())],
+        ),
+      );
+      setMessage("Quick Battle started. Confirm the wallet request, then the agents settle on X Layer.");
+      const hash = await writeContractAsync({
+        address: contracts.StrikeNationArena,
+        abi: arenaAbi,
+        functionName: "battleAgent",
+        args: [BigInt(agent.id), aiOpponent.id, strategyHash, recommendation.power, marketPick === "YES"],
+        chainId: xLayer.id,
+      });
+      setPendingHash(hash);
+      setLastMatch((current) => ({ ...current, phase: "Shot submitted on X Layer" }));
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const result = parseAgentMatchResult(receipt) || parseBattleResult(receipt);
+      const won = result?.won ?? false;
+      const points = result?.points ?? (won ? 187 : 55);
+      setScores((current) =>
+        current.map((country) =>
+          country.id === selectedCountry.id ? { ...country, score: country.score + points } : country,
+        ),
+      );
+      setAgent((current) =>
+        current
+          ? {
+              ...current,
+              wins: current.wins + (won ? 1 : 0),
+              losses: current.losses + (won ? 0 : 1),
+              level: won ? "Silver" : current.level,
+            }
+          : current,
+      );
+      setLastMatch({
+        mode: "quick",
+        phase: won ? "Goal confirmed" : "AI keeper wins the duel",
+        home: selectedCountry.name,
+        away: `${aiOpponent.name} AI`,
+        scoreHome: result?.scoreUser,
+        scoreAway: result?.scoreAgent,
+        won,
+      });
+      const scoreLine =
+        result?.scoreUser !== undefined ? ` ${selectedCountry.name} ${result.scoreUser}-${result.scoreAgent} ${aiOpponent.name} AI.` : "";
+      setMessage(`${agent.name} finished a Quick Battle against ${aiOpponent.name} AI.${scoreLine} ${hash}`);
+    } catch (error) {
+      setLastMatch((current) => ({ ...current, phase: "Battle cancelled" }));
+      setMessage(error?.shortMessage || error?.message || "Quick Battle was cancelled or failed.");
+    } finally {
+      setBusy("");
+    }
   }
 
   async function createCourtMatch() {
@@ -500,39 +525,61 @@ export default function StrikeNationClient() {
     const matchId = courtMatchId || joinMatchId;
     if (!canTransact || !matchId) return;
     setBusy("court-settle");
-    const hash = await writeContractAsync({
-      address: contracts.StrikeNationArena,
-      abi: arenaAbi,
-      functionName: "settleCourtMatch",
-      args: [BigInt(matchId)],
-      chainId: xLayer.id,
+    setLastMatch({
+      mode: "pvp",
+      phase: "PvP agents settling the court",
+      home: selectedCountry.name,
+      away: "Rival wallet",
     });
-    setPendingHash(hash);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    const result = parseCourtResult(receipt);
-    if (result) {
-      const userWon = result.winner?.toLowerCase() === address?.toLowerCase();
-      const points = userWon ? result.winnerPoints : result.loserPoints;
-      setScores((current) =>
-        current.map((country) =>
-          country.id === selectedCountry.id ? { ...country, score: country.score + points } : country,
-        ),
-      );
-      setAgent((current) =>
-        current
-          ? {
-              ...current,
-              wins: current.wins + (userWon ? 1 : 0),
-              losses: current.losses + (userWon ? 0 : 1),
-              level: userWon ? "Silver" : current.level,
-            }
-          : current,
-      );
-      setMessage(`Court Match #${matchId} settled autonomously: ${result.scoreA}-${result.scoreB}. ${hash}`);
-    } else {
-      setMessage(`Court Match #${matchId} settled on X Layer. ${hash}`);
+    try {
+      const hash = await writeContractAsync({
+        address: contracts.StrikeNationArena,
+        abi: arenaAbi,
+        functionName: "settleCourtMatch",
+        args: [BigInt(matchId)],
+        chainId: xLayer.id,
+      });
+      setPendingHash(hash);
+      setLastMatch((current) => ({ ...current, phase: "PvP result submitted on X Layer" }));
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const result = parseCourtResult(receipt);
+      if (result) {
+        const userWon = result.winner?.toLowerCase() === address?.toLowerCase();
+        const points = userWon ? result.winnerPoints : result.loserPoints;
+        setScores((current) =>
+          current.map((country) =>
+            country.id === selectedCountry.id ? { ...country, score: country.score + points } : country,
+          ),
+        );
+        setAgent((current) =>
+          current
+            ? {
+                ...current,
+                wins: current.wins + (userWon ? 1 : 0),
+                losses: current.losses + (userWon ? 0 : 1),
+                level: userWon ? "Silver" : current.level,
+              }
+            : current,
+        );
+        setLastMatch({
+          mode: "pvp",
+          phase: userWon ? "Your squad wins" : "Rival squad wins",
+          home: selectedCountry.name,
+          away: "Rival wallet",
+          scoreHome: result.scoreA,
+          scoreAway: result.scoreB,
+          won: userWon,
+        });
+        setMessage(`Court Match #${matchId} settled autonomously: ${result.scoreA}-${result.scoreB}. ${hash}`);
+      } else {
+        setMessage(`Court Match #${matchId} settled on X Layer. ${hash}`);
+      }
+    } catch (error) {
+      setLastMatch((current) => ({ ...current, phase: "Settlement cancelled" }));
+      setMessage(error?.shortMessage || error?.message || "Court settlement was cancelled or failed.");
+    } finally {
+      setBusy("");
     }
-    setBusy("");
   }
 
   async function placePrediction(choice) {
@@ -903,10 +950,15 @@ export default function StrikeNationClient() {
                 <small>Create or join a match against another real wallet.</small>
               </button>
             </div>
-            <div className="football-court" aria-label="Autonomous football court">
+            <div className={`football-court ${isMatchBusy ? "is-battling" : ""}`} aria-label="Autonomous football court">
+              <div className="match-status">
+                <span>{isMatchBusy ? "Live action" : lastMatch ? "Last result" : "Ready"}</span>
+                <strong>{isMatchBusy ? lastMatch?.phase || "Agents are moving" : lastMatch?.phase || "Choose a battle mode"}</strong>
+              </div>
               <div className="goal goal-left">Goal</div>
               <div className="goal goal-right">Goal</div>
               <div className="center-circle"></div>
+              <div className="shot-trail"></div>
               <div className="agent-piece agent-home">
                 <span>{profile.avatar || selectedCountry.flag}</span>
                 <strong>{agent?.name || "Your Agent"}</strong>
@@ -920,6 +972,15 @@ export default function StrikeNationClient() {
                 <small>{battleMode === "quick" ? "Autonomous squad" : "Second wallet"}</small>
               </div>
               <div className="court-ball"></div>
+              {lastMatch?.scoreHome !== undefined && (
+                <div className={`court-score ${lastMatch.won ? "won" : "lost"}`}>
+                  <span>{lastMatch.home}</span>
+                  <strong>
+                    {lastMatch.scoreHome}-{lastMatch.scoreAway}
+                  </strong>
+                  <span>{lastMatch.away}</span>
+                </div>
+              )}
             </div>
             <div className="match-card">
               <div className="team-block">

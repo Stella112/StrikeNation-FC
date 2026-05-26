@@ -669,6 +669,10 @@ select:focus {
     repeating-linear-gradient(90deg, rgba(39, 129, 79, 0.95) 0 72px, rgba(31, 95, 66, 0.95) 72px 144px);
 }
 
+.football-court.is-battling {
+  box-shadow: 0 0 0 1px rgba(244, 201, 93, 0.34), 0 0 38px rgba(244, 201, 93, 0.16);
+}
+
 .football-court::before {
   content: "";
   position: absolute;
@@ -685,6 +689,35 @@ select:focus {
   left: 50%;
   width: 2px;
   background: rgba(250, 246, 232, 0.55);
+}
+
+.match-status {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 5;
+  display: grid;
+  min-width: 220px;
+  max-width: min(78%, 420px);
+  padding: 9px 12px;
+  border: 1px solid rgba(244, 201, 93, 0.32);
+  border-radius: 8px;
+  background: rgba(8, 9, 7, 0.76);
+  color: var(--ink);
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.match-status span {
+  color: var(--gold);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.match-status strong {
+  overflow-wrap: anywhere;
+  font-size: 0.84rem;
 }
 
 .center-circle {
@@ -766,6 +799,14 @@ select:focus {
   transform: translate(50%, -50%);
 }
 
+.is-battling .agent-home {
+  animation: homePress 1.25s ease-in-out infinite;
+}
+
+.is-battling .agent-away {
+  animation: awayPress 1.25s ease-in-out infinite;
+}
+
 .court-ball {
   position: absolute;
   z-index: 3;
@@ -778,6 +819,70 @@ select:focus {
     radial-gradient(circle at 35% 30%, #fff 0 30%, #111 31% 41%, #fff 42% 100%);
   border: 1px solid rgba(0, 0, 0, 0.4);
   transform: translate(-50%, -50%);
+}
+
+.is-battling .court-ball {
+  animation: ballStrike 1.05s cubic-bezier(0.42, 0, 0.2, 1) infinite;
+}
+
+.shot-trail {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 28%;
+  width: 44%;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(244, 201, 93, 0.88), transparent);
+  opacity: 0;
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: left center;
+}
+
+.is-battling .shot-trail {
+  animation: shotTrail 1.05s ease-in-out infinite;
+}
+
+.court-score {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: min(88%, 480px);
+  padding: 9px 12px;
+  border: 1px solid rgba(250, 246, 232, 0.16);
+  border-radius: 8px;
+  background: rgba(8, 9, 7, 0.78);
+  transform: translateX(-50%);
+}
+
+.court-score strong {
+  color: var(--gold);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.court-score span {
+  min-width: 0;
+  color: #eee5ca;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.court-score span:last-child {
+  text-align: right;
+}
+
+.court-score.won {
+  border-color: rgba(46, 184, 115, 0.54);
+}
+
+.court-score.lost {
+  border-color: rgba(220, 76, 63, 0.54);
 }
 
 .court-actions {
@@ -885,6 +990,60 @@ select:focus {
 
 .share-panel p {
   margin-bottom: 0;
+}
+
+@keyframes ballStrike {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  28% {
+    transform: translate(-240%, -95%) scale(0.92);
+  }
+  56% {
+    transform: translate(170%, 72%) scale(1.08);
+  }
+  78% {
+    transform: translate(265%, -45%) scale(0.96);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes homePress {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  50% {
+    transform: translate(-34%, -56%);
+  }
+}
+
+@keyframes awayPress {
+  0%,
+  100% {
+    transform: translate(50%, -50%);
+  }
+  50% {
+    transform: translate(34%, -44%);
+  }
+}
+
+@keyframes shotTrail {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0);
+  }
+  22%,
+  66% {
+    opacity: 0.9;
+    transform: translateY(-50%) scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0);
+  }
 }
 
 @media (max-width: 1120px) {

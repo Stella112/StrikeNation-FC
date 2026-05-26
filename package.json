@@ -1,0 +1,31 @@
+{
+  "name": "strikenation-fc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "World Cup AI-agent FanDAO arena on X Layer.",
+  "scripts": {
+    "dev": "next dev -p 5173",
+    "build": "next build",
+    "start": "next start -p 5173",
+    "static": "node server.js",
+    "compile": "node scripts/compile.js",
+    "wallet:create": "node scripts/create-wallet.js",
+    "deploy:xlayer": "node scripts/deploy-xlayer.js",
+    "verify:xlayer": "node scripts/verify-features.js",
+    "smoke:xlayer": "node scripts/smoke-xlayer.js"
+  },
+  "dependencies": {
+    "@okxweb3/x402-core": "^0.1.0",
+    "@okxweb3/x402-evm": "^0.1.1",
+    "@okxweb3/x402-fetch": "^0.1.0",
+    "@tanstack/react-query": "^5.100.14",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.15.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "solc": "^0.8.30",
+    "viem": "^2.51.0",
+    "wagmi": "^3.6.15"
+  }
+}

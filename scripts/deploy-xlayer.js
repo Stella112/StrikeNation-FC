@@ -8,6 +8,7 @@ const { ContractFactory, JsonRpcProvider, Wallet } = require("ethers");
 const root = path.join(__dirname, "..");
 const rpcUrl = process.env.XLAYER_RPC_URL || "https://rpc.xlayer.tech";
 const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
+const stakeTokenAddress = process.env.USDT0_ADDRESS || "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
 
 if (!privateKey) {
   throw new Error("DEPLOYER_PRIVATE_KEY is missing. Create .env.local or set the environment variable.");
@@ -36,7 +37,7 @@ async function main() {
 
   const passport = await deploy("FanPassportNFT", signer);
   const agents = await deploy("StrikeAgentNFT", signer);
-  const arena = await deploy("StrikeNationArena", signer, [passport.address, agents.address]);
+  const arena = await deploy("StrikeNationArena", signer, [passport.address, agents.address, stakeTokenAddress]);
 
   const setArenaTx = await agents.contract.setArena(arena.address);
   await setArenaTx.wait();
@@ -51,6 +52,7 @@ async function main() {
       FanPassportNFT: passport.address,
       StrikeAgentNFT: agents.address,
       StrikeNationArena: arena.address,
+      USDT0: stakeTokenAddress,
     },
     explorerBase: "https://www.okx.com/web3/explorer/xlayer/address",
     deployedAt: new Date().toISOString(),

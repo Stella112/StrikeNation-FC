@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+interface IERC20 {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
 contract Ownable {
     address public owner;
 
@@ -294,6 +299,7 @@ contract StrikeAgentNFT is SimpleERC721 {
 contract StrikeNationArena is Ownable {
     FanPassportNFT public immutable passport;
     StrikeAgentNFT public immutable agents;
+    IERC20 public immutable stakeToken;
 
     struct Battle {
         address player;
@@ -331,12 +337,29 @@ contract StrikeNationArena is Ownable {
         uint256 createdAt;
     }
 
+    struct LiveMatchMarket {
+        address creator;
+        string fixtureId;
+        string homeTeam;
+        string awayTeam;
+        string question;
+        uint64 kickoff;
+        uint8 status;
+        uint8 result;
+        bytes32 agentIntentHash;
+        uint256 totalStaked;
+    }
+
     uint256 public battleCount;
     uint256 public courtMatchCount;
     uint256 public marketIntentCount;
+    uint256 public liveMarketCount;
     mapping(uint256 => Battle) public battles;
     mapping(uint256 => CourtMatch) public courtMatches;
     mapping(uint256 => MarketIntent) public marketIntents;
+    mapping(uint256 => LiveMatchMarket) public liveMarkets;
+    mapping(uint256 => uint256[3]) public liveMarketTotals;
+    mapping(uint256 => mapping(address => uint256[3])) public liveMarketStakes;
     mapping(uint8 => uint256) public countryPoints;
     mapping(address => uint256) public pendingRewards;
 
@@ -391,12 +414,32 @@ contract StrikeNationArena is Ownable {
         string question,
         bytes32 agentStrategyHash
     );
+    event LiveMatchMarketPosted(
+        uint256 indexed marketId,
+        address indexed creator,
+        string fixtureId,
+        string homeTeam,
+        string awayTeam,
+        string question,
+        uint64 kickoff,
+        bytes32 agentIntentHash
+    );
+    event LiveMatchStakePlaced(
+        uint256 indexed marketId,
+        address indexed player,
+        uint8 indexed pick,
+        uint256 amount,
+        uint256 totalStaked
+    );
+    event LiveMatchResolved(uint256 indexed marketId, uint8 indexed result);
+    event LiveMatchClaimed(uint256 indexed marketId, address indexed player, uint256 payout);
     event PredictionPlaced(address indexed player, uint8 indexed country, uint8 opponentCountry, bool backedCountry);
     event RewardClaimed(address indexed player, uint256 amountWei);
 
-    constructor(address passportAddress, address agentAddress) {
+    constructor(address passportAddress, address agentAddress, address stakeTokenAddress) {
         passport = FanPassportNFT(passportAddress);
         agents = StrikeAgentNFT(agentAddress);
+        stakeToken = IERC20(stakeTokenAddress);
     }
 
     receive() external payable {}
@@ -564,6 +607,85 @@ contract StrikeNationArena is Ownable {
 
         countryPoints[countryA] += 18;
         emit ExchangeOSMarketIntent(intentId, msg.sender, courtMatchId, countryA, countryB, question, agentStrategyHash);
+    }
+
+    function postLiveMatchMarket(
+        string calldata fixtureId,
+        string calldata homeTeam,
+        string calldata awayTeam,
+        string calldata question,
+        uint64 kickoff,
+        bytes32 agentIntentHash
+    ) external returns (uint256 marketId) {
+        require(passport.passportOf(msg.sender) != 0, "NO_PASSPORT");
+        require(bytes(fixtureId).length > 0, "EMPTY_FIXTURE");
+        require(bytes(homeTeam).length > 0 && bytes(awayTeam).length > 0, "EMPTY_TEAMS");
+        require(bytes(question).length > 0, "EMPTY_QUESTION");
+
+        marketId = ++liveMarketCount;
+        liveMarkets[marketId] = LiveMatchMarket({
+            creator: msg.sender,
+            fixtureId: fixtureId,
+            homeTeam: homeTeam,
+            awayTeam: awayTeam,
+            question: question,
+            kickoff: kickoff,
+            status: 0,
+            result: 3,
+            agentIntentHash: agentIntentHash,
+            totalStaked: 0
+        });
+
+        countryPoints[passport.countryOf(msg.sender)] += 22;
+        emit LiveMatchMarketPosted(marketId, msg.sender, fixtureId, homeTeam, awayTeam, question, kickoff, agentIntentHash);
+    }
+
+    function stakeLiveMatch(uint256 marketId, uint8 pick, uint256 amount) external {
+        LiveMatchMarket storage market = liveMarkets[marketId];
+        require(market.creator != address(0), "UNKNOWN_MARKET");
+        require(market.status == 0, "MARKET_CLOSED");
+        require(passport.passportOf(msg.sender) != 0, "NO_PASSPORT");
+        require(pick < 3, "INVALID_PICK");
+        require(amount > 0, "ZERO_AMOUNT");
+
+        require(stakeToken.transferFrom(msg.sender, address(this), amount), "TRANSFER_FAILED");
+
+        liveMarketStakes[marketId][msg.sender][pick] += amount;
+        liveMarketTotals[marketId][pick] += amount;
+        market.totalStaked += amount;
+        countryPoints[passport.countryOf(msg.sender)] += 20;
+
+        emit LiveMatchStakePlaced(marketId, msg.sender, pick, amount, market.totalStaked);
+    }
+
+    function resolveLiveMatch(uint256 marketId, uint8 result) external onlyOwner {
+        LiveMatchMarket storage market = liveMarkets[marketId];
+        require(market.creator != address(0), "UNKNOWN_MARKET");
+        require(market.status == 0, "ALREADY_RESOLVED");
+        require(result < 3, "INVALID_RESULT");
+
+        market.status = 1;
+        market.result = result;
+
+        emit LiveMatchResolved(marketId, result);
+    }
+
+    function claimLiveMatch(uint256 marketId) external {
+        LiveMatchMarket storage market = liveMarkets[marketId];
+        require(market.status == 1, "NOT_RESOLVED");
+
+        uint8 result = market.result;
+        uint256 winningStake = liveMarketStakes[marketId][msg.sender][result];
+        require(winningStake > 0, "NO_WINNING_STAKE");
+
+        uint256 winningPool = liveMarketTotals[marketId][result];
+        require(winningPool > 0, "NO_WINNING_POOL");
+
+        uint256 payout = (winningStake * market.totalStaked) / winningPool;
+        liveMarketStakes[marketId][msg.sender][result] = 0;
+
+        require(stakeToken.transfer(msg.sender, payout), "PAYOUT_FAILED");
+        emit LiveMatchClaimed(marketId, msg.sender, payout);
     }
 
     function enterBattleAndSettle(

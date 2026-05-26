@@ -939,6 +939,102 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.live-match-hub {
+  margin-bottom: 16px;
+}
+
+.live-grid {
+  display: grid;
+  grid-template-columns: 0.85fr 1.1fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.fixture-list {
+  display: grid;
+  gap: 10px;
+}
+
+.fixture-card,
+.pick-card {
+  border: 1px solid rgba(250, 246, 232, 0.14);
+  border-radius: 8px;
+  background: rgba(250, 246, 232, 0.05);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fixture-card {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+}
+
+.fixture-card.selected,
+.pick-card.selected {
+  border-color: rgba(244, 201, 93, 0.72);
+  background: rgba(244, 201, 93, 0.12);
+}
+
+.fixture-card span,
+.fixture-card small,
+.stake-note {
+  color: #eee5ca;
+}
+
+.fixture-card strong {
+  font-size: 1.05rem;
+}
+
+.live-market-card,
+.stake-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(8, 9, 7, 0.44);
+}
+
+.live-market-card p,
+.stake-note {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.intent-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: rgba(250, 246, 232, 0.06);
+}
+
+.intent-line span {
+  color: var(--muted);
+}
+
+.intent-line strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.pick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pick-card {
+  min-height: 54px;
+  padding: 10px;
+  text-align: center;
+  font-weight: 850;
+}
+
 .market-card p {
   font-size: 1.18rem;
   font-weight: 850;
@@ -1088,6 +1184,8 @@ select:focus {
   .profile-panel,
   .profile-form,
   .battle-mode-grid,
+  .live-grid,
+  .pick-grid,
   .shot-panel,
   .court-actions,
   .premium-scout {

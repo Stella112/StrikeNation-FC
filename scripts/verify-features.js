@@ -77,6 +77,17 @@ async function main() {
     "post-exchange-os-market-intent",
     await arenaA.proposeExchangeOSMarket(matchId, 1, 2, "Will Nigeria FanDAO beat Brazil in the next autonomous court?", id("verify-market")),
   );
+  await wait(
+    "post-live-match-market-intent",
+    await arenaA.postLiveMatchMarket(
+      "verify-wc26-nigeria-brazil",
+      "Nigeria",
+      "Brazil",
+      "Will Nigeria beat Brazil in the verified live match hub?",
+      Math.floor(Date.now() / 1000) + 86400,
+      id("verify-live-market"),
+    ),
+  );
 
   const nigeriaPoints = await arenaA.countryPoints(1);
   const brazilPoints = await arenaA.countryPoints(2);

@@ -4,8 +4,8 @@ StrikeNation FC is a World Cup AI-agent FanDAO arena for the Build X Hackathon.
 
 Users join a country FanDAO, mint a Fan Passport, deploy an 11-player Strike
 Agent squad, run Quick Battles against an AI squad, challenge a second wallet in
-PvP, enter a simple outcome market, climb a national leaderboard, and generate a
-shareable X post.
+PvP, post live World Cup match intents, stake USDT0 on outcome predictions, climb
+a national leaderboard, and generate a shareable X post.
 
 ## Run locally
 
@@ -76,9 +76,11 @@ There is no demo bypass. Without facilitator credentials, the endpoint returns
 4. Mint an 11-player Strike Agent squad.
 5. Start Quick Battle against an AI-controlled squad.
 6. Use Challenge Player to create or join a two-wallet PvP court.
-7. Back YES or NO in the outcome market.
-8. Watch the leaderboard and NFT level update.
-9. Copy the generated X post.
+7. Post a Live Match intent for a real World Cup fixture.
+8. Approve and stake USDT0 on Home, Draw, or Away.
+9. Back YES or NO in the side outcome market.
+10. Watch the leaderboard and NFT level update.
+11. Copy the generated X post.
 
 ## Mainnet verification
 
@@ -90,4 +92,5 @@ npm run verify:xlayer
 
 The script mints test passports and squads, runs Quick Battle, creates/joins a
 two-wallet PvP match with a temporary funded wallet, settles the court, places a
-prediction, and posts an Exchange OS-ready market intent.
+prediction, posts an Exchange OS-ready market intent, and posts a live match
+market intent. USDT0 staking requires the testing wallet to hold USDT0 on X Layer.

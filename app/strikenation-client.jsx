@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { wrapFetchWithPaymentFromConfig } from "@okxweb3/x402-fetch";
 import { ExactEvmScheme, toClientEvmSigner } from "@okxweb3/x402-evm";
-import { decodeEventLog, encodePacked, keccak256, parseAbiItem, stringToHex } from "viem";
+import { decodeEventLog, encodePacked, keccak256, parseAbiItem, parseUnits, stringToHex } from "viem";
 import {
   useAccount,
   useConnect,
@@ -14,7 +14,7 @@ import {
   useWalletClient,
   useWriteContract,
 } from "wagmi";
-import { agentAbi, arenaAbi, contracts, explorerAddress, explorerTx, passportAbi, xLayer } from "@/lib/contracts";
+import { agentAbi, arenaAbi, contracts, erc20Abi, explorerAddress, explorerTx, passportAbi, xLayer } from "@/lib/contracts";
 
 const countries = [
   { name: "Nigeria", id: 1, flag: "🇳🇬", identity: "Underdog speed", score: 1240 },
@@ -31,6 +31,33 @@ const countries = [
   { name: "India", id: 13, flag: "🇮🇳", identity: "Rising crowd", score: 1024 },
   { name: "China", id: 14, flag: "🇨🇳", identity: "Pressure build", score: 1017 },
   { name: "Underdog", id: 5, flag: "🌍", identity: "Chaos market", score: 1112 },
+];
+
+const liveFixtures = [
+  {
+    id: "wc26-opener",
+    home: "Mexico",
+    away: "South Africa",
+    kickoff: "2026-06-11T19:00:00Z",
+    venue: "Opening Match",
+    focus: "opening pressure",
+  },
+  {
+    id: "wc26-nigeria-brazil",
+    home: "Nigeria",
+    away: "Brazil",
+    kickoff: "2026-06-14T20:00:00Z",
+    venue: "FanDAO Rivalry",
+    focus: "underdog upset",
+  },
+  {
+    id: "wc26-japan-korea",
+    home: "Japan",
+    away: "South Korea",
+    kickoff: "2026-06-16T18:00:00Z",
+    venue: "AFC Derby",
+    focus: "tempo battle",
+  },
 ];
 
 function shortAddress(address) {
@@ -170,6 +197,23 @@ function parseCourtResult(receipt) {
   return null;
 }
 
+function parseLiveMarketId(receipt) {
+  const eventAbi = parseAbiItem(
+    "event LiveMatchMarketPosted(uint256 indexed marketId,address indexed creator,string fixtureId,string homeTeam,string awayTeam,string question,uint64 kickoff,bytes32 agentIntentHash)",
+  );
+
+  for (const log of receipt.logs) {
+    try {
+      const parsed = decodeEventLog({ abi: [eventAbi], data: log.data, topics: log.topics });
+      if (parsed.eventName === "LiveMatchMarketPosted") return Number(parsed.args.marketId);
+    } catch {
+      // Ignore unrelated logs.
+    }
+  }
+
+  return null;
+}
+
 export default function StrikeNationClient() {
   const { address, chainId, isConnected } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
@@ -209,6 +253,10 @@ export default function StrikeNationClient() {
   const [joinMatchId, setJoinMatchId] = useState("");
   const [battleMode, setBattleMode] = useState("quick");
   const [lastMatch, setLastMatch] = useState(null);
+  const [selectedFixture, setSelectedFixture] = useState(liveFixtures[0]);
+  const [liveMarketId, setLiveMarketId] = useState("");
+  const [livePick, setLivePick] = useState(0);
+  const [stakeAmount, setStakeAmount] = useState("1");
   const [premiumScout, setPremiumScout] = useState(null);
 
   const { data: passportId, refetch: refetchPassport } = useReadContract({
@@ -633,6 +681,75 @@ export default function StrikeNationClient() {
     setBusy("");
   }
 
+  async function postLiveMatchIntent() {
+    if (!canTransact || !hasPassport) return;
+    setBusy("live-intent");
+    try {
+      const question = `Will ${selectedFixture.home} beat ${selectedFixture.away} in ${selectedFixture.venue}?`;
+      const intentHash = keccak256(
+        encodePacked(
+          ["string", "uint256"],
+          [`${selectedFixture.id}:${question}:${agent?.name || "AI Captain"}:${recommendation.reason}`, BigInt(Date.now())],
+        ),
+      );
+      const kickoff = Math.floor(new Date(selectedFixture.kickoff).getTime() / 1000);
+      const hash = await writeContractAsync({
+        address: contracts.StrikeNationArena,
+        abi: arenaAbi,
+        functionName: "postLiveMatchMarket",
+        args: [selectedFixture.id, selectedFixture.home, selectedFixture.away, question, kickoff, intentHash],
+        chainId: xLayer.id,
+      });
+      setPendingHash(hash);
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const marketId = parseLiveMarketId(receipt);
+      if (marketId) setLiveMarketId(String(marketId));
+      setMessage(`Live match market intent posted for ${selectedFixture.home} vs ${selectedFixture.away}. ${hash}`);
+    } catch (error) {
+      setMessage(error?.shortMessage || error?.message || "Live match intent was cancelled or failed.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function stakeLiveMatch() {
+    if (!canTransact || !liveMarketId) return;
+    setBusy("live-stake");
+    try {
+      const amount = parseUnits(stakeAmount || "0", 6);
+      if (amount <= 0n) {
+        setMessage("Enter a USDT0 stake amount greater than zero.");
+        setBusy("");
+        return;
+      }
+      const approveHash = await writeContractAsync({
+        address: contracts.USDT0,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [contracts.StrikeNationArena, amount],
+        chainId: xLayer.id,
+      });
+      setPendingHash(approveHash);
+      await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+      const stakeHash = await writeContractAsync({
+        address: contracts.StrikeNationArena,
+        abi: arenaAbi,
+        functionName: "stakeLiveMatch",
+        args: [BigInt(liveMarketId), livePick, amount],
+        chainId: xLayer.id,
+      });
+      setPendingHash(stakeHash);
+      await publicClient.waitForTransactionReceipt({ hash: stakeHash });
+      const pickLabel = livePick === 0 ? selectedFixture.home : livePick === 1 ? "Draw" : selectedFixture.away;
+      setMessage(`Staked ${stakeAmount} USDT0 on ${pickLabel} for ${selectedFixture.home} vs ${selectedFixture.away}. ${stakeHash}`);
+    } catch (error) {
+      setMessage(error?.shortMessage || error?.message || "USDT0 stake was cancelled or failed.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function requestPremiumScout() {
     setBusy("premium-scout");
     try {
@@ -697,6 +814,7 @@ export default function StrikeNationClient() {
           <a href="#fandao">FanDAO</a>
           <a href="#agent">Agent</a>
           <a href="#battle">Battle</a>
+          <a href="#live">Live</a>
           <a href="#market">Market</a>
         </nav>
 
@@ -854,6 +972,87 @@ export default function StrikeNationClient() {
                 <span>{country.score.toLocaleString()} pts</span>
               </button>
             ))}
+          </div>
+        </section>
+
+        <section className="panel live-match-hub" id="live">
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">Live World Cup layer</span>
+              <h2>Match Intent + USDT0 Stake</h2>
+            </div>
+            <button className="primary-btn small" disabled={!canTransact || !hasPassport || busy === "live-intent"} onClick={postLiveMatchIntent}>
+              {busy === "live-intent" ? "Posting..." : "Post Live Intent"}
+            </button>
+          </div>
+
+          <div className="live-grid">
+            <div className="fixture-list">
+              {liveFixtures.map((fixture) => (
+                <button
+                  type="button"
+                  key={fixture.id}
+                  className={`fixture-card ${selectedFixture.id === fixture.id ? "selected" : ""}`}
+                  onClick={() => setSelectedFixture(fixture)}
+                >
+                  <span>{fixture.venue}</span>
+                  <strong>
+                    {fixture.home} vs {fixture.away}
+                  </strong>
+                  <small>{new Date(fixture.kickoff).toLocaleString()}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="live-market-card">
+              <span className="eyebrow">Market intent</span>
+              <h3>
+                {selectedFixture.home} vs {selectedFixture.away}
+              </h3>
+              <p>
+                AI Captain watches the real fixture, posts a verifiable outcome intent, then fans stake USDT0 on
+                Home, Draw, or Away. Resolution can be handled by an oracle/operator when real World Cup data is live.
+              </p>
+              <div className="intent-line">
+                <span>Fixture</span>
+                <strong>{selectedFixture.id}</strong>
+              </div>
+              <div className="intent-line">
+                <span>Focus</span>
+                <strong>{selectedFixture.focus}</strong>
+              </div>
+              <label>
+                Market ID
+                <input value={liveMarketId} onChange={(event) => setLiveMarketId(event.target.value)} placeholder="Post intent or paste market ID" />
+              </label>
+            </div>
+
+            <div className="stake-card">
+              <span className="eyebrow">USDT0 prediction stake</span>
+              <div className="pick-grid">
+                {[selectedFixture.home, "Draw", selectedFixture.away].map((label, index) => (
+                  <button
+                    type="button"
+                    key={label}
+                    className={`pick-card ${livePick === index ? "selected" : ""}`}
+                    onClick={() => setLivePick(index)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label>
+                Stake amount
+                <input value={stakeAmount} onChange={(event) => setStakeAmount(event.target.value)} inputMode="decimal" />
+              </label>
+              <button className="primary-btn" disabled={!canTransact || !liveMarketId || busy === "live-stake"} onClick={stakeLiveMatch}>
+                {busy === "live-stake" ? "Staking..." : "Approve + Stake USDT0"}
+              </button>
+              <p className="stake-note">
+                Uses USDT0 on X Layer. This MVP locks stakes in the arena contract and supports pro-rata winner claims
+                after market resolution.
+              </p>
+            </div>
           </div>
         </section>
 

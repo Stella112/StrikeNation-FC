@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { wrapFetchWithPaymentFromConfig, decodePaymentResponseHeader } from "@okxweb3/x402-fetch";
+import { ExactEvmScheme, toClientEvmSigner } from "@okxweb3/x402-evm";
+import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 
 const countries = [
   { code: "NG", name: "Nigeria", style: "Underdog speed", weakness: "open midfield after counters" },
@@ -24,7 +27,11 @@ export default function ScoutMarketplacePage() {
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
   const [reportData, setReportData] = useState(null);
+  const [paymentData, setPaymentData] = useState(null);
   const [query, setQuery] = useState("");
+  const { address, isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
 
   const reports = useMemo(
     () =>
@@ -46,12 +53,33 @@ export default function ScoutMarketplacePage() {
   );
 
   async function purchaseReport(report) {
+    if (!isConnected || !address || !walletClient) {
+      setError("Connect your wallet first so x402 can request a payment signature.");
+      return;
+    }
+
     setLoading(report.id);
     setError("");
     setReportData(null);
+    setPaymentData(null);
 
     try {
-      const response = await fetch("/api/agent/premium-scout", {
+      const signer = toClientEvmSigner(
+        {
+          address,
+          signTypedData: (message) => walletClient.signTypedData({ account: address, ...message }),
+        },
+        publicClient,
+      );
+      const fetchWithPayment = wrapFetchWithPaymentFromConfig(fetch, {
+        schemes: [
+          {
+            network: "eip155:196",
+            client: new ExactEvmScheme(signer, { rpcUrl: "https://rpc.xlayer.tech" }),
+          },
+        ],
+      });
+      const response = await fetchWithPayment(new URL("/api/agent/premium-scout", window.location.origin), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -64,14 +92,16 @@ export default function ScoutMarketplacePage() {
 
       const data = await response.json();
       if (!response.ok) {
-        setError(data.message || data.error || "x402 payment required.");
+        setError(formatX402Error(data));
         return;
       }
 
+      const paymentResponse = response.headers.get("PAYMENT-RESPONSE");
       setPurchased(report.id);
       setReportData(data);
+      setPaymentData(paymentResponse ? decodePaymentResponseHeader(paymentResponse) : null);
     } catch (err) {
-      setError(err?.message || "Could not request x402 scout report.");
+      setError(formatX402Error(err));
     } finally {
       setLoading("");
     }
@@ -109,9 +139,10 @@ export default function ScoutMarketplacePage() {
             </div>
             <button
               onClick={() => purchaseReport(report)}
+              disabled={loading === report.id}
               className="w-full bg-background border border-border font-mono text-[10px] uppercase tracking-widest font-bold px-4 py-3 rounded-sm group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-colors"
             >
-              {loading === report.id ? "Checking x402..." : purchased === report.id ? "Purchased" : "Purchase via x402"}
+              {loading === report.id ? "Open wallet to pay..." : purchased === report.id ? "Purchased" : "Purchase via x402"}
             </button>
           </div>
         ))}
@@ -137,8 +168,31 @@ export default function ScoutMarketplacePage() {
           <h3 className="font-display text-2xl uppercase italic">Scout Report Analysis</h3>
           <p className="text-sm">"{reportData?.summary || "Premium x402 scouting report unlocked."}"</p>
           {reportData?.recommendedCourtPlan && <p className="text-sm text-muted-foreground">{reportData.recommendedCourtPlan}</p>}
+          {paymentData && (
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              x402 receipt confirmed on {paymentData.network || "X Layer"}.
+            </p>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+function formatX402Error(error) {
+  const message = typeof error === "string" ? error : error?.message || error?.error || error?.detail || "";
+
+  if (message.includes("x402-config-missing") || error?.headers?.get?.("PAYMENT-REQUIRED") === "x402-config-missing") {
+    return "x402 is installed, but the server is missing OKX/x402 env keys. Add the OKX API key, secret, passphrase, project ID, and pay-to wallet.";
+  }
+
+  if (message.includes("Failed to parse payment requirements")) {
+    return "The server returned 402, but not full x402 payment requirements. Check the OKX facilitator keys and X402_PAY_TO_ADDRESS.";
+  }
+
+  if (message.includes("User rejected") || message.includes("rejected")) {
+    return "Wallet signature was rejected. Try again and approve the x402 payment signature.";
+  }
+
+  return message || "Could not complete the x402 scout purchase.";
 }

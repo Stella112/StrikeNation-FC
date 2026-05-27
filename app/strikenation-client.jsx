@@ -101,6 +101,65 @@ const commentaryTemplates = [
   ({ opponent, minute }) => `${minute}' ${opponent} AI almost reads it, but the timing is half a beat late.`,
 ];
 
+const incidentTemplates = [
+  {
+    type: "penalty",
+    label: "Penalty",
+    tone: "kick",
+    impact: "attacking",
+    text: ({ country, agentName, minute }) => `${minute}' Penalty shout. ${agentName} is clipped in the box and ${country} are staring at the spot.`,
+  },
+  {
+    type: "yellow",
+    label: "Yellow card",
+    tone: "whistle",
+    impact: "balanced",
+    text: ({ opponent, minute }) => `${minute}' Yellow card for ${opponent} AI after a late stop in midfield. The referee finally reaches the pocket.`,
+  },
+  {
+    type: "red",
+    label: "Red card",
+    tone: "whistle",
+    impact: "attacking",
+    text: ({ opponent, minute }) => `${minute}' Red card drama. ${opponent} AI loses a defender and the whole match tilts toward the attack.`,
+  },
+  {
+    type: "offside",
+    label: "Offside",
+    tone: "whistle",
+    impact: "defensive",
+    text: ({ agentName, minute }) => `${minute}' Offside flag goes up. ${agentName} had the timing by a hair, but the line held firm.`,
+  },
+  {
+    type: "corner",
+    label: "Corner",
+    tone: "kick",
+    impact: "attacking",
+    text: ({ country, minute }) => `${minute}' Corner to ${country}. The center-backs are jogging up and the crowd noise rises.`,
+  },
+  {
+    type: "free-kick",
+    label: "Free kick",
+    tone: "kick",
+    impact: "attacking",
+    text: ({ country, direction, minute }) => `${minute}' Free kick on the ${direction} side. ${country} are loading a set-piece routine.`,
+  },
+  {
+    type: "var",
+    label: "VAR check",
+    tone: "whistle",
+    impact: "balanced",
+    text: ({ country, minute }) => `${minute}' VAR check. ${country} wait on the signal while the arena holds its breath.`,
+  },
+];
+
+const evolvedRoles = {
+  Goalkeeper: "Sweeper Keeper",
+  Defender: "Ball-Winning Defender",
+  Midfielder: "Pressing Playmaker",
+  Forward: "Clinical Finisher",
+};
+
 function playMatchSound(kind) {
   if (typeof window === "undefined") return;
   const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -128,6 +187,13 @@ function playMatchSound(kind) {
   if (kind === "whistle") {
     tone(1600, 0, 0.16, "square", 0.55);
     tone(1900, 0.18, 0.22, "square", 0.5);
+  } else if (kind === "halftime") {
+    tone(1500, 0, 0.18, "square", 0.5);
+    tone(1500, 0.28, 0.18, "square", 0.5);
+  } else if (kind === "fulltime") {
+    tone(1700, 0, 0.14, "square", 0.52);
+    tone(1700, 0.22, 0.14, "square", 0.52);
+    tone(1700, 0.44, 0.28, "square", 0.52);
   } else if (kind === "kick") {
     tone(95, 0, 0.12, "triangle", 0.8);
     tone(260, 0.03, 0.08, "sine", 0.35);
@@ -350,6 +416,10 @@ export default function StrikeNationClient() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [matchMinute, setMatchMinute] = useState(0);
   const [matchFormat, setMatchFormat] = useState("Compressed 90");
+  const [matchPhase, setMatchPhase] = useState("Pre-match");
+  const [matchEvents, setMatchEvents] = useState([]);
+  const [formationMode, setFormationMode] = useState("balanced");
+  const [evolvedPlayerIds, setEvolvedPlayerIds] = useState([]);
   const [selectedFixture, setSelectedFixture] = useState(liveFixtures[0]);
   const [liveMarketId, setLiveMarketId] = useState("");
   const [livePick, setLivePick] = useState(0);
@@ -395,9 +465,69 @@ export default function StrikeNationClient() {
     [selectedCountry.id],
   );
   const isMatchBusy = ["quick-battle", "court-create", "court-join", "court-settle"].includes(busy);
+  const activeFormationDots = useMemo(
+    () =>
+      formationDots.map((dot, index) => {
+        const liveDrift = isMatchBusy ? Math.sin((matchMinute + index * 13) / 7) * 2.8 : 0;
+        const roleDrift = dot.role.includes("W") ? 2.2 : dot.role.includes("M") ? 1.4 : 0.8;
+        let x = dot.x;
+        let y = dot.y + liveDrift;
+
+        if (formationMode === "attacking") {
+          x += dot.side === "home" ? roleDrift + 4 : -(roleDrift + 2);
+        } else if (formationMode === "defensive") {
+          x += dot.side === "home" ? -(roleDrift + 3) : roleDrift + 2;
+        }
+
+        return {
+          ...dot,
+          x: Math.max(6, Math.min(94, x)),
+          y: Math.max(16, Math.min(84, y)),
+        };
+      }),
+    [formationMode, isMatchBusy, matchMinute],
+  );
+  const agentMarketIdeas = useMemo(() => {
+    const nextWindow = Math.min(90, Math.max(15, matchMinute + 15));
+    const agentLabel = agent?.name || "AI Captain";
+    return [
+      {
+        question: `Will ${selectedCountry.name} score before ${nextWindow}'?`,
+        pick: recommendation.marketMove === "NO" ? "NO" : "YES",
+        signal: `Claude reads ${recommendation.direction} pressure and ${recommendation.power} power.`,
+      },
+      {
+        question: `Will there be a penalty or VAR check before full-time?`,
+        pick: recommendation.risk === "high" ? "YES" : "NO",
+        signal: `${agentLabel} watches box pressure and referee volatility.`,
+      },
+      {
+        question: `Will ${agentLabel} finish with 2+ decisive attacking actions?`,
+        pick: recommendation.power >= 72 ? "YES" : "NO",
+        signal: `Agent role: ${agent?.role || agentStyle}. Current phase: ${matchPhase}.`,
+      },
+      {
+        question: `Will ${aiOpponent.name} AI receive a card in this match?`,
+        pick: matchMinute > 35 || recommendation.risk === "high" ? "YES" : "NO",
+        signal: `Opponent pressure spikes when ${selectedCountry.name} overloads midfield.`,
+      },
+    ];
+  }, [agent, agentStyle, aiOpponent.name, matchMinute, matchPhase, recommendation, selectedCountry.name]);
+
+  function phaseForMinute(minute) {
+    if (minute <= 0) return "Pre-match";
+    if (minute < 45) return "First half";
+    if (minute === 45) return "Half-time";
+    if (minute < 90) return "Second half";
+    return "Full-time";
+  }
 
   function addCommentary(line) {
     setCommentaryFeed((current) => [line, ...current].slice(0, 5));
+  }
+
+  function addMatchEvent(event) {
+    setMatchEvents((current) => [event, ...current].slice(0, 8));
   }
 
   function addBroadcastLine(nextMinute = matchMinute) {
@@ -410,6 +540,32 @@ export default function StrikeNationClient() {
       risk: recommendation.risk,
       minute: Math.max(1, Math.min(nextMinute, 90)),
     };
+    const nextPhase = phaseForMinute(context.minute);
+    setMatchPhase(nextPhase);
+
+    if (context.minute === 45) {
+      playSound("halftime");
+      addMatchEvent({ minute: 45, type: "half", label: "Half-time", text: "Half-time whistle. Agents regroup and Claude adjusts the next run." });
+      addCommentary("45' Half-time. The squads go in, the AI Captain rewrites the attacking plan, and the market board is still moving.");
+      return;
+    }
+
+    if (context.minute >= 90) {
+      playSound("fulltime");
+      return;
+    }
+
+    if (context.minute > 8 && context.minute % 3 === 0) {
+      const incident = incidentTemplates[(context.minute + selectedCountry.id + aiOpponent.id + matchEvents.length) % incidentTemplates.length];
+      const text = incident.text(context);
+      setFormationMode(incident.impact);
+      playSound(incident.tone);
+      addMatchEvent({ minute: context.minute, type: incident.type, label: incident.label, text });
+      lastCommentaryRef.current = text;
+      addCommentary(text);
+      return;
+    }
+
     const pool = commentaryTemplates
       .map((template) => template(context))
       .filter((line) => line !== lastCommentaryRef.current);
@@ -423,12 +579,58 @@ export default function StrikeNationClient() {
     if (soundEnabled) playMatchSound(kind);
   }
 
+  function startMatchSimulation(format, phase, openingLine) {
+    setMatchMinute(1);
+    setMatchFormat(format);
+    setMatchPhase(phase);
+    setMatchEvents([]);
+    setFormationMode("balanced");
+    playSound("whistle");
+    addMatchEvent({ minute: 1, type: "kickoff", label: "Kick-off", text: openingLine });
+    addCommentary(openingLine);
+  }
+
+  function evolveSquadAfterMatch(won) {
+    if (!squad.length) {
+      setFormationMode(won ? "attacking" : "defensive");
+      return;
+    }
+
+    const primaryIndex = won ? 9 : 6;
+    const secondaryIndex = won ? 10 : 2;
+    const evolvedIndexes = [primaryIndex, secondaryIndex].filter((index) => squad[index]);
+    const evolvedIds = evolvedIndexes.map((index) => squad[index].id || index + 1);
+    setEvolvedPlayerIds(evolvedIds);
+    setFormationMode(won ? "attacking" : "defensive");
+    setSquad((current) =>
+      current.map((player, index) => {
+        if (!evolvedIndexes.includes(index)) return player;
+        const baseRole = player.role?.replace("Evolved ", "") || "Forward";
+        return {
+          ...player,
+          role: evolvedRoles[baseRole] || `Evolved ${baseRole}`,
+          level: won ? (player.level === "Gold" ? "Gold" : "Silver") : player.level,
+        };
+      }),
+    );
+    addMatchEvent({
+      minute: 90,
+      type: "evolution",
+      label: "Agent evolution",
+      text: won
+        ? `${squad[primaryIndex]?.name || "Your striker"} evolves after full-time and pushes the squad into an attacking shape.`
+        : `${squad[secondaryIndex]?.name || "Your defender"} adapts after the loss and drops the squad into a defensive shape.`,
+    });
+  }
+
   useEffect(() => {
     if (!isMatchBusy) return undefined;
     const interval = window.setInterval(() => {
       setMatchMinute((current) => {
+        if (current >= 90) return current;
         const jump = 5 + ((current + selectedCountry.id + aiOpponent.id) % 9);
-        const nextMinute = Math.min(current + jump, 90);
+        const rawNextMinute = Math.min(current + jump, 90);
+        const nextMinute = current < 45 && rawNextMinute >= 45 ? 45 : rawNextMinute;
         addBroadcastLine(nextMinute);
         return nextMinute;
       });
@@ -589,10 +791,11 @@ export default function StrikeNationClient() {
   async function runQuickBattle() {
     if (!canTransact || !agent) return;
     setBusy("quick-battle");
-    setMatchMinute(1);
-    setMatchFormat("Compressed 90");
-    playSound("whistle");
-    addCommentary(`Whistle goes. ${agent.name} leads ${selectedCountry.name} into a Quick Battle against ${aiOpponent.name} AI.`);
+    startMatchSimulation(
+      "90-minute simulation",
+      "First half",
+      `1' Whistle goes. ${agent.name} leads ${selectedCountry.name} into a full match simulation against ${aiOpponent.name} AI.`,
+    );
     setLastMatch({
       mode: "quick",
       phase: "Agents entering the pitch",
@@ -648,7 +851,7 @@ export default function StrikeNationClient() {
       );
       setLastMatch({
         mode: "quick",
-        phase: won ? "Goal confirmed" : "AI keeper wins the duel",
+        phase: won ? "Full-time win" : "Full-time loss",
         home: selectedCountry.name,
         away: `${aiOpponent.name} AI`,
         scoreHome: displayScore.scoreUser,
@@ -656,11 +859,14 @@ export default function StrikeNationClient() {
         won,
       });
       setMatchMinute(90);
+      setMatchPhase("Full-time");
       playSound(won ? "goal" : "save");
+      window.setTimeout(() => playSound("fulltime"), 260);
+      evolveSquadAfterMatch(won);
       addCommentary(
         won
-          ? `Goal. ${selectedCountry.name} takes it ${displayScore.scoreUser}-${displayScore.scoreAgent} and the crowd wakes up.`
-          : `Saved. ${aiOpponent.name} AI reads the strike and steals the moment.`,
+          ? `90' Full-time. ${selectedCountry.name} take it ${displayScore.scoreUser}-${displayScore.scoreAgent}; the squad evolves into a more aggressive shape.`
+          : `90' Full-time. ${aiOpponent.name} AI reads the match and takes it ${displayScore.scoreAgent}-${displayScore.scoreUser}; the squad adapts positions for the next run.`,
       );
       const scoreLine =
         displayScore.scoreUser !== undefined ? ` ${selectedCountry.name} ${displayScore.scoreUser}-${displayScore.scoreAgent} ${aiOpponent.name} AI.` : "";
@@ -676,10 +882,11 @@ export default function StrikeNationClient() {
   async function createCourtMatch() {
     if (!canTransact || !agent?.id) return;
     setBusy("court-create");
-    setMatchMinute(1);
-    setMatchFormat("Open challenge");
-    playSound("whistle");
-    addCommentary(`${profile.name} opens a Challenge Player court. Waiting for a rival wallet to step in.`);
+    startMatchSimulation(
+      "Open PvP challenge",
+      "First half",
+      `1' ${profile.name} opens a Challenge Player court. The first whistle is live while the arena waits for a rival wallet.`,
+    );
     const strategyHash = keccak256(
       encodePacked(
         ["string", "uint256"],
@@ -710,8 +917,15 @@ export default function StrikeNationClient() {
     setBusy("court-join");
     setMatchMinute(45);
     setMatchFormat("PvP challenge");
-    playSound("whistle");
-    addCommentary(`${profile.name} joins Court Match #${joinMatchId}. Both squads are locked in.`);
+    setMatchPhase("Half-time");
+    playSound("halftime");
+    addMatchEvent({
+      minute: 45,
+      type: "half",
+      label: "Half-time",
+      text: `${profile.name} joins Court Match #${joinMatchId}. Both squads are locked in for the second half.`,
+    });
+    addCommentary(`45' Half-time restart. ${profile.name} joins Court Match #${joinMatchId}. Both squads are locked in.`);
     const strategyHash = keccak256(
       encodePacked(
         ["string", "uint256"],
@@ -739,8 +953,10 @@ export default function StrikeNationClient() {
     setBusy("court-settle");
     setMatchMinute(75);
     setMatchFormat("Final phase");
+    setMatchPhase("Second half");
     playSound("kick");
-    addCommentary(`Court Match #${matchId} is settling. The dots collapse into the box.`);
+    addMatchEvent({ minute: 75, type: "pressure", label: "Final phase", text: `Court Match #${matchId} is settling. The dots collapse into the box.` });
+    addCommentary(`75' Court Match #${matchId} is settling. The dots collapse into the box.`);
     setLastMatch({
       mode: "pvp",
       phase: "PvP agents settling the court",
@@ -787,11 +1003,14 @@ export default function StrikeNationClient() {
           won: userWon,
         });
         setMatchMinute(90);
+        setMatchPhase("Full-time");
         playSound(userWon ? "goal" : "save");
+        window.setTimeout(() => playSound("fulltime"), 260);
+        evolveSquadAfterMatch(userWon);
         addCommentary(
           userWon
-            ? `Full-time on-chain. Your squad wins ${result.scoreA}-${result.scoreB}.`
-            : `Full-time on-chain. Rival wallet takes it ${result.scoreA}-${result.scoreB}.`,
+            ? `90' Full-time on-chain. Your squad wins ${result.scoreA}-${result.scoreB} and two agents evolve their positions.`
+            : `90' Full-time on-chain. Rival wallet takes it ${result.scoreA}-${result.scoreB}; your squad reshapes for the rematch.`,
         );
         setMessage(`Court Match #${matchId} settled autonomously: ${result.scoreA}-${result.scoreB}. ${hash}`);
       } else {
@@ -827,11 +1046,11 @@ export default function StrikeNationClient() {
     setBusy("");
   }
 
-  async function proposeExchangeOSMarket() {
+  async function proposeExchangeOSMarket(questionOverride) {
     if (!canTransact || !hasPassport) return;
     setBusy("exchange-os");
     const matchId = courtMatchId || joinMatchId || "0";
-    const question = `Will ${selectedCountry.name} FanDAO beat Brazil in the next autonomous court?`;
+    const question = questionOverride || `Will ${selectedCountry.name} FanDAO beat ${aiOpponent.name} in this autonomous match?`;
     const strategyHash = keccak256(
       encodePacked(
         ["string", "uint256"],
@@ -842,7 +1061,7 @@ export default function StrikeNationClient() {
       address: contracts.StrikeNationArena,
       abi: arenaAbi,
       functionName: "proposeExchangeOSMarket",
-      args: [BigInt(matchId), selectedCountry.id, 2, question, strategyHash],
+      args: [BigInt(matchId), selectedCountry.id, aiOpponent.id, question, strategyHash],
       chainId: xLayer.id,
     });
     setPendingHash(hash);
@@ -852,6 +1071,13 @@ export default function StrikeNationClient() {
         country.id === selectedCountry.id ? { ...country, score: country.score + 18 } : country,
       ),
     );
+    addMatchEvent({
+      minute: Math.max(1, matchMinute || 1),
+      type: "market",
+      label: "Agent intent",
+      text: `${agent?.name || "AI Captain"} posts a prediction intent: ${question}`,
+    });
+    addCommentary(`${Math.max(1, matchMinute || 1)}' Agent market desk: ${question}`);
     setMessage(`Exchange OS-ready market intent posted on X Layer: ${question}. ${hash}`);
     setBusy("");
   }
@@ -1284,7 +1510,12 @@ export default function StrikeNationClient() {
                 name: `Player ${index + 1}`,
                 role: index === 0 ? "Goalkeeper" : index <= 4 ? "Defender" : index <= 7 ? "Midfielder" : "Forward",
               }))).map((player, index) => (
-                <div className={`squad-player ${squad.length ? "minted" : ""}`} key={`${player.name}-${index}`}>
+                <div
+                  className={`squad-player ${squad.length ? "minted" : ""} ${
+                    evolvedPlayerIds.includes(player.id || index + 1) ? "evolved" : ""
+                  }`}
+                  key={`${player.name}-${index}`}
+                >
                   <span>{index + 1}</span>
                   <strong>{player.name}</strong>
                   <small>{player.role}</small>
@@ -1331,14 +1562,16 @@ export default function StrikeNationClient() {
               </div>
               <div className="match-clock">
                 <strong>{matchMinute || 0}'</strong>
-                <span>{matchFormat}</span>
+                <span>{matchPhase}</span>
+                <small>{matchFormat}</small>
               </div>
+              <div className={`formation-badge ${formationMode}`}>{formationMode} shape</div>
               <div className="goal goal-left">Goal</div>
               <div className="goal goal-right">Goal</div>
               <div className="center-circle"></div>
               <div className="shot-trail"></div>
               <div className="formation-layer" aria-hidden="true">
-                {formationDots.map((dot, index) => (
+                {activeFormationDots.map((dot, index) => (
                   <span
                     key={`${dot.side}-${dot.role}-${index}`}
                     className={`player-dot ${dot.side}`}
@@ -1387,6 +1620,23 @@ export default function StrikeNationClient() {
                 {commentaryFeed.map((line, index) => (
                   <p key={`${line}-${index}`}>{line}</p>
                 ))}
+              </div>
+              <div className="event-timeline" aria-label="Match events">
+                {matchEvents.length ? (
+                  matchEvents.map((event, index) => (
+                    <div className={`event-pill ${event.type}`} key={`${event.minute}-${event.type}-${index}`}>
+                      <span>{event.minute}'</span>
+                      <strong>{event.label}</strong>
+                      <small>{event.text}</small>
+                    </div>
+                  ))
+                ) : (
+                  <div className="event-pill muted">
+                    <span>0'</span>
+                    <strong>Waiting for kick-off</strong>
+                    <small>Start a Quick Battle or Challenge Player match to open the live event timeline.</small>
+                  </div>
+                )}
               </div>
             </div>
             <div className="match-card">
@@ -1495,10 +1745,29 @@ export default function StrikeNationClient() {
               </div>
             </div>
             <div className="market-card">
-              <p>Will {selectedCountry.name} FanDAO beat Brazil today?</p>
+              <p>Agent prediction intents</p>
               <div className="market-note">
-                Agents can post on-chain market intents today, ready to route into Exchange OS outcome venues as builder
-                access opens.
+                Once a match starts, Claude turns the live state into prediction intents. Your agent proposes the market,
+                then your wallet approves the on-chain post for Exchange OS-ready routing.
+              </div>
+              <div className="agent-intent-grid">
+                {agentMarketIdeas.map((idea) => (
+                  <div className="agent-intent-card" key={idea.question}>
+                    <span>{matchPhase}</span>
+                    <strong>{idea.question}</strong>
+                    <small>{idea.signal}</small>
+                    <div>
+                      <em>AI pick: {idea.pick}</em>
+                      <button
+                        className="secondary-btn"
+                        disabled={!canTransact || !hasPassport || busy === "exchange-os"}
+                        onClick={() => proposeExchangeOSMarket(idea.question)}
+                      >
+                        Post Intent
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="market-actions">
                 <button className="secondary-btn" disabled={!canTransact || !agent || busy === "prediction-YES"} onClick={() => placePrediction("YES")}>
@@ -1507,8 +1776,12 @@ export default function StrikeNationClient() {
                 <button className="secondary-btn" disabled={!canTransact || !agent || busy === "prediction-NO"} onClick={() => placePrediction("NO")}>
                   Back NO
                 </button>
-                <button className="primary-btn" disabled={!canTransact || !hasPassport || busy === "exchange-os"} onClick={proposeExchangeOSMarket}>
-                  {busy === "exchange-os" ? "Posting..." : "Post Market Intent"}
+                <button
+                  className="primary-btn"
+                  disabled={!canTransact || !hasPassport || busy === "exchange-os"}
+                  onClick={() => proposeExchangeOSMarket()}
+                >
+                  {busy === "exchange-os" ? "Posting..." : "Post Main Intent"}
                 </button>
               </div>
               <div className="odds-row">

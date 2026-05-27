@@ -127,6 +127,13 @@ function playMatchSound(kind) {
   window.setTimeout(() => context.close(), 900);
 }
 
+function fallbackScore(won, seed) {
+  const base = Array.from(seed || "strikenation").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const winner = 1 + (base % 5);
+  const loser = base % Math.min(winner, 4);
+  return won ? { scoreUser: winner, scoreAgent: loser } : { scoreUser: loser, scoreAgent: winner };
+}
+
 function shortAddress(address) {
   return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected";
 }
@@ -554,6 +561,8 @@ export default function StrikeNationClient() {
       phase: "Agents entering the pitch",
       home: selectedCountry.name,
       away: `${aiOpponent.name} AI`,
+      scoreHome: undefined,
+      scoreAway: undefined,
     });
     if (!agent.id) {
       setMessage("Agent mint is confirmed, but its ID was not found yet. Refresh and deploy a new agent for a clean battle run.");
@@ -582,6 +591,8 @@ export default function StrikeNationClient() {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       const result = parseAgentMatchResult(receipt) || parseBattleResult(receipt);
       const won = result?.won ?? false;
+      const displayScore =
+        result?.scoreUser !== undefined ? result : fallbackScore(won, `${hash}:${agent.id}:${recommendation.power}:${Date.now()}`);
       const points = result?.points ?? (won ? 187 : 55);
       setScores((current) =>
         current.map((country) =>
@@ -603,18 +614,18 @@ export default function StrikeNationClient() {
         phase: won ? "Goal confirmed" : "AI keeper wins the duel",
         home: selectedCountry.name,
         away: `${aiOpponent.name} AI`,
-        scoreHome: result?.scoreUser,
-        scoreAway: result?.scoreAgent,
+        scoreHome: displayScore.scoreUser,
+        scoreAway: displayScore.scoreAgent,
         won,
       });
       playSound(won ? "goal" : "save");
       addCommentary(
         won
-          ? `Goal. ${selectedCountry.name} takes it ${result?.scoreUser ?? "-"}-${result?.scoreAgent ?? "-"} and the crowd wakes up.`
+          ? `Goal. ${selectedCountry.name} takes it ${displayScore.scoreUser}-${displayScore.scoreAgent} and the crowd wakes up.`
           : `Saved. ${aiOpponent.name} AI reads the strike and steals the moment.`,
       );
       const scoreLine =
-        result?.scoreUser !== undefined ? ` ${selectedCountry.name} ${result.scoreUser}-${result.scoreAgent} ${aiOpponent.name} AI.` : "";
+        displayScore.scoreUser !== undefined ? ` ${selectedCountry.name} ${displayScore.scoreUser}-${displayScore.scoreAgent} ${aiOpponent.name} AI.` : "";
       setMessage(`${agent.name} finished a Quick Battle against ${aiOpponent.name} AI.${scoreLine} ${hash}`);
     } catch (error) {
       setLastMatch((current) => ({ ...current, phase: "Battle cancelled" }));
@@ -1302,7 +1313,7 @@ export default function StrikeNationClient() {
                 <small>{battleMode === "quick" ? "Autonomous squad" : "Second wallet"}</small>
               </div>
               <div className="court-ball"></div>
-              {lastMatch?.scoreHome !== undefined && (
+              {!isMatchBusy && lastMatch?.scoreHome !== undefined && (
                 <div className={`court-score ${lastMatch.won ? "won" : "lost"}`}>
                   <span>{lastMatch.home}</span>
                   <strong>

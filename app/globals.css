@@ -907,8 +907,14 @@ select:focus {
   color: #f5f0e1;
 }
 
+.player-dot {
+  animation: playerIdle 3.4s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
 .is-battling .player-dot {
-  animation: playerPulse 1.6s ease-in-out infinite;
+  animation-name: playerPulse;
+  animation-duration: 1.05s;
   animation-delay: var(--delay);
 }
 
@@ -1269,10 +1275,20 @@ select:focus {
     transform: translate(-50%, -50%);
   }
   35% {
-    transform: translate(calc(-50% + 5px), calc(-50% - 4px));
+    transform: translate(calc(-50% + 12px), calc(-50% - 8px));
   }
   70% {
-    transform: translate(calc(-50% - 4px), calc(-50% + 3px));
+    transform: translate(calc(-50% - 10px), calc(-50% + 7px));
+  }
+}
+
+@keyframes playerIdle {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  50% {
+    transform: translate(calc(-50% + 3px), calc(-50% - 2px));
   }
 }
 

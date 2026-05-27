@@ -1,39 +1,142 @@
 # StrikeNation FC
 
-StrikeNation FC is a World Cup AI-agent FanDAO arena for the Build X Hackathon.
+## AI agents battle for your country on X Layer
 
-Users join a country FanDAO, mint a Fan Passport, deploy an 11-player Strike
-Agent squad, run Quick Battles against an AI squad, challenge a second wallet in
-PvP, post live World Cup match intents, stake USDT0 on outcome predictions, climb
-a national leaderboard, and generate a shareable X post.
+StrikeNation FC turns World Cup fandom into an on-chain country battle arena.
+Fans join national FanDAOs, mint Fan Passport NFTs, deploy an 11-player AI Strike
+Agent squad, battle rival nations, post prediction intents, and climb global
+leaderboards through real X Layer transactions.
 
-## Run locally
-
-Install dependencies once:
-
-```powershell
-npm install
-```
-
-Run the Next.js app:
-
-```powershell
-npm run dev
-```
-
-Then open:
+The core idea is simple:
 
 ```text
-http://localhost:5173
+Join a country -> Mint Fan Passport -> Deploy 11 AI agents -> Battle AI or another wallet -> Earn points -> Post market intents -> Rise with your nation
 ```
 
-## X Layer deployment
+Instead of watching football passively, fans become on-chain participants. A
+Nigerian fan can deploy a squad against Brazil. A Japan fan can challenge South
+Korea. A solo judge can start an instant AI match, while two real wallets can
+settle a PvP court match on X Layer.
 
-See `DEPLOYMENT.md`.
+## Why it matters
+
+World Cup attention is emotional, social, and global. StrikeNation FC converts
+that attention into repeatable on-chain actions:
+
+- passport NFT mints
+- 11-player squad NFT mints
+- AI-powered battle transactions
+- wallet-vs-wallet PvP matches
+- country leaderboard updates
+- Exchange OS-ready market intents
+- USDT0 live match staking flows
+- x402-protected premium AI scouting
+
+The result is a game-first World Cup product where every fan action creates an
+on-chain footprint.
+
+## Product features
+
+### Country FanDAOs
+
+Users join a national FanDAO such as Nigeria, Brazil, Argentina, England, Japan,
+South Korea, Saudi Arabia, Qatar, India, China, Indonesia, Iran, Australia, or an
+Underdog faction. Each country has points, identity, rivalry, and leaderboard
+position.
+
+### Fan Passport NFT
+
+Each wallet mints one Fan Passport NFT. This is the user's country membership
+and profile anchor on X Layer.
+
+### 11-player AI Strike Agent squad
+
+After minting a passport, each fan mints an 11-player Strike Agent squad. The
+squad represents the fan in matches and evolves through battle activity.
+
+### Quick Battle
+
+Quick Battle is the always-available mode. The user chooses an AI-controlled
+opponent country, receives an AI strategy, submits the match on-chain, and then
+watches a 60-second compressed football broadcast with:
+
+- moving pitch players
+- match timer
+- half-time flow
+- goals, fouls, cards, offside-style events
+- whistle/audio cues
+- Claude-powered commentary
+- final score and X Layer transaction link
+
+### Challenge Player
+
+PvP mode supports real wallet-vs-wallet gameplay:
+
+```text
+Wallet A creates match -> Wallet B joins -> strategies are submitted -> match settles on X Layer
+```
+
+This gives the app a true multiplayer mode while keeping Quick Battle available
+when no second wallet is online.
+
+### Arena history and profile history
+
+The History page shows total arena activity across StrikeNation contracts, not
+only one user. The Profile page shows the connected wallet's own Fan Passport,
+squad, battle, market, and staking history.
+
+### Country leaderboard
+
+Country points are read from the deployed `StrikeNationArena` contract. Wins and
+participation feed national rankings.
+
+### World Cup live page
+
+The real World Cup page is intentionally marked "coming soon" until real-world
+World Cup matches start. Once live fixtures are active, Claude-powered agents are
+designed to post outcome reads and users can approve prediction intents or stake
+USDT0 on match outcomes.
+
+### Exchange OS-ready prediction layer
+
+Agents can post market intents such as:
+
+- Will Nigeria FanDAO beat Brazil today?
+- Will this AI squad win the next arena match?
+- Which country will top the leaderboard?
+- What is the likely outcome of a real World Cup fixture?
+
+These are structured as Exchange OS-ready intents so StrikeNation can plug into
+X Layer's outcome market infrastructure as it opens.
+
+### x402 premium AI scouting
+
+Premium Scout reports are protected by x402. Users can pay for AI-generated
+country scouting reports, opponent weakness reads, and tactical breakdowns.
+
+## AI system
+
+StrikeNation uses Claude Sonnet as the agent brain. The app sends match context,
+country identity, opponent style, and recent state to the server-side agent API.
+Claude returns:
+
+- tactical recommendations
+- match commentary
+- market-intent suggestions
+- premium scout reports
+- country-specific hype copy
+
+The API key stays server-side. No Claude key is exposed to the browser.
+
+## X Layer integration
+
+StrikeNation FC is deployed on X Layer mainnet and uses OKX Wallet for user
+transactions. Core actions are backed by deployed contracts rather than a demo
+database.
 
 ### Deployed mainnet contracts
 
-StrikeNation FC is deployed on X Layer mainnet (`chainId: 196`).
+Network: X Layer mainnet (`chainId: 196`)
 
 | Contract | Purpose | Address |
 | --- | --- | --- |
@@ -44,30 +147,45 @@ StrikeNation FC is deployed on X Layer mainnet (`chainId: 196`).
 
 The frontend reads these addresses from `lib/contracts.js`.
 
-## Claude agent brain
+## Tech stack
 
-Put your Claude key in `.env.local`:
+- Next.js app router
+- Wagmi + viem
+- OKX Wallet / injected wallet connection
+- X Layer mainnet contracts
+- Claude Sonnet server-side agent API
+- OKX x402 packages for paid Scout reports
+- USDT0 staking and prediction flows
+
+## Run locally
+
+Install dependencies:
+
+```powershell
+npm install
+```
+
+Run the app:
+
+```powershell
+npm run dev
+```
+
+Open:
 
 ```text
-CLAUDE_API_KEY=your_key_here
+http://localhost:5173
+```
+
+## Environment variables
+
+Create `.env.local`:
+
+```text
+ANTHROPIC_API_KEY=your_claude_key
 CLAUDE_MODEL=claude-sonnet-4-20250514
 CLAUDE_MAX_TOKENS=140
-```
 
-Do not prefix it with `NEXT_PUBLIC_`. The app calls `/api/agent/recommend`,
-which runs server-side so the key is not exposed to the browser.
-
-## x402 premium scout
-
-The premium scout endpoint lives at:
-
-```text
-POST /api/agent/premium-scout
-```
-
-It is designed as an x402-protected paid AI service. Configure:
-
-```text
 X402_PAY_TO_ADDRESS=your_receiving_wallet
 X402_PREMIUM_SCOUT_PRICE=$0.01
 OKX_API_KEY=your_okx_facilitator_key
@@ -78,32 +196,49 @@ OKX_X402_API_PREFIX=/api/v6/pay/x402
 X402_FACILITATOR_BASE_URL=https://web3.okx.com
 ```
 
-There is no demo bypass. Without facilitator credentials, the endpoint returns
-`402 Payment Required` and stays locked.
+Do not prefix private keys with `NEXT_PUBLIC_`.
 
-## MVP flow
+## Main user flow
 
 1. Connect OKX Wallet.
-2. Choose a country FanDAO.
-3. Mint a Fan Passport.
-4. Mint an 11-player Strike Agent squad.
-5. Start Quick Battle against an AI-controlled squad.
-6. Use Challenge Player to create or join a two-wallet PvP court.
-7. Post a Live Match intent for a real World Cup fixture.
-8. Approve and stake USDT0 on Home, Draw, or Away.
-9. Back YES or NO in the side outcome market.
-10. Watch the leaderboard and NFT level update.
-11. Copy the generated X post.
+2. Create a player profile.
+3. Choose a country FanDAO.
+4. Mint Fan Passport NFT.
+5. Mint 11-player Strike Agent squad.
+6. Start Quick Battle against an AI-controlled country.
+7. Watch the football broadcast and commentary.
+8. Challenge another real wallet in PvP.
+9. Post prediction or Exchange OS-ready market intents.
+10. Stake USDT0 on live match outcomes when available.
+11. Track profile history and global arena history.
 
-## Mainnet verification
+## Verification
 
-Run this after deploy to verify the live X Layer contracts:
+Run this after deployment to verify live X Layer contracts:
 
 ```powershell
 npm run verify:xlayer
 ```
 
-The script mints test passports and squads, runs Quick Battle, creates/joins a
-two-wallet PvP match with a temporary funded wallet, settles the court, places a
-prediction, posts an Exchange OS-ready market intent, and posts a live match
-market intent. USDT0 staking requires the testing wallet to hold USDT0 on X Layer.
+The script mints passports and squads, runs Quick Battle, creates and settles a
+two-wallet PvP match, places a prediction, posts an Exchange OS-ready market
+intent, and posts a live match market intent. USDT0 staking requires the testing
+wallet to hold USDT0 on X Layer.
+
+## Hackathon positioning
+
+StrikeNation FC is built around the World Cup theme and focuses on the strongest
+Build X categories:
+
+- AI Agent products
+- GameFi
+- Fan social layers
+- NFT identity and progression
+- prediction markets
+- X Layer transaction growth
+- x402 paid AI services
+- Exchange OS-ready market creation
+
+The product is not just a football-themed dashboard. It is an on-chain fan arena
+where AI agents, national rivalry, market prediction, and wallet activity all
+reinforce each other.

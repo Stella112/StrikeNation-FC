@@ -90,9 +90,9 @@ export default function ScoutMarketplacePage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await readResponsePayload(response);
       if (!response.ok) {
-        setError(formatX402Error(data));
+        setError(formatX402Error(data, response));
         return;
       }
 
@@ -179,14 +179,25 @@ export default function ScoutMarketplacePage() {
   );
 }
 
-function formatX402Error(error) {
-  const message = typeof error === "string" ? error : error?.message || error?.error || error?.detail || "";
+async function readResponsePayload(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
 
-  if (message.includes("x402-config-missing") || error?.headers?.get?.("PAYMENT-REQUIRED") === "x402-config-missing") {
+function formatX402Error(error, response) {
+  const paymentRequired = response?.headers?.get?.("PAYMENT-REQUIRED") || error?.headers?.get?.("PAYMENT-REQUIRED");
+  const message = typeof error === "string" ? error : error?.message || error?.error || error?.detail || error?.cause?.message || "";
+
+  if (message.includes("x402-config-missing") || paymentRequired === "x402-config-missing") {
     return "x402 is installed, but the server is missing OKX/x402 env keys. Add the OKX API key, secret, passphrase, project ID, and pay-to wallet.";
   }
 
-  if (message.includes("Failed to parse payment requirements")) {
+  if (message.includes("Failed to parse payment requirements") || response?.status === 402) {
     return "The server returned 402, but not full x402 payment requirements. Check the OKX facilitator keys and X402_PAY_TO_ADDRESS.";
   }
 
@@ -194,5 +205,9 @@ function formatX402Error(error) {
     return "Wallet signature was rejected. Try again and approve the x402 payment signature.";
   }
 
-  return message || "Could not complete the x402 scout purchase.";
+  if (message.includes("insufficient") || message.includes("allowance") || message.includes("balance")) {
+    return "The x402 payment could not settle. Check that this wallet has enough supported USDT0 on X Layer and approve the wallet prompt.";
+  }
+
+  return message || "Could not complete the x402 scout purchase. Connect OKX Wallet on X Layer, make sure the wallet has USDT0 for x402, then approve the payment signature.";
 }

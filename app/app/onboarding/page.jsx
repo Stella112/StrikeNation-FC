@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { keccak256, stringToHex } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { TransactionHistory } from "@/app/app/components/TransactionHistory";
 import { agentAbi, contracts, explorerTx, passportAbi } from "@/lib/contracts";
 
 const countries = [
@@ -189,6 +190,10 @@ export default function OnboardingPage() {
             </Link>
           </div>
         )}
+      </div>
+
+      <div className="mt-10">
+        <TransactionHistory title="Profile Transaction History" limit={10} />
       </div>
     </div>
   );

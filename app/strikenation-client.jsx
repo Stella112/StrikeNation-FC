@@ -160,6 +160,9 @@ const evolvedRoles = {
   Forward: "Clinical Finisher",
 };
 
+const MATCH_SIMULATION_MS = 60_000;
+const MATCH_TICK_MS = 1_000;
+
 function playMatchSound(kind) {
   if (typeof window === "undefined") return;
   const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -379,6 +382,8 @@ export default function StrikeNationClient() {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient({ chainId: xLayer.id });
   const lastCommentaryRef = useRef("");
+  const matchStartedAtRef = useRef(null);
+  const fullTimeSoundPlayedRef = useRef(false);
 
   const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [passportMinted, setPassportMinted] = useState(false);
@@ -551,7 +556,7 @@ export default function StrikeNationClient() {
     }
 
     if (context.minute >= 90) {
-      playSound("fulltime");
+      playFinalWhistle();
       return;
     }
 
@@ -579,12 +584,27 @@ export default function StrikeNationClient() {
     if (soundEnabled) playMatchSound(kind);
   }
 
+  function playFinalWhistle() {
+    if (fullTimeSoundPlayedRef.current) return;
+    fullTimeSoundPlayedRef.current = true;
+    playSound("fulltime");
+  }
+
+  function waitForFullTime() {
+    const startedAt = matchStartedAtRef.current;
+    if (!startedAt) return Promise.resolve();
+    const remaining = Math.max(0, MATCH_SIMULATION_MS - (Date.now() - startedAt));
+    return new Promise((resolve) => window.setTimeout(resolve, remaining));
+  }
+
   function startMatchSimulation(format, phase, openingLine) {
     setMatchMinute(1);
     setMatchFormat(format);
     setMatchPhase(phase);
     setMatchEvents([]);
     setFormationMode("balanced");
+    matchStartedAtRef.current = Date.now();
+    fullTimeSoundPlayedRef.current = false;
     playSound("whistle");
     addMatchEvent({ minute: 1, type: "kickoff", label: "Kick-off", text: openingLine });
     addCommentary(openingLine);
@@ -628,13 +648,14 @@ export default function StrikeNationClient() {
     const interval = window.setInterval(() => {
       setMatchMinute((current) => {
         if (current >= 90) return current;
-        const jump = 5 + ((current + selectedCountry.id + aiOpponent.id) % 9);
-        const rawNextMinute = Math.min(current + jump, 90);
+        const elapsed = matchStartedAtRef.current ? Date.now() - matchStartedAtRef.current : 0;
+        const rawNextMinute = Math.min(90, Math.max(1, Math.floor((elapsed / MATCH_SIMULATION_MS) * 90)));
         const nextMinute = current < 45 && rawNextMinute >= 45 ? 45 : rawNextMinute;
+        if (nextMinute === current) return current;
         addBroadcastLine(nextMinute);
         return nextMinute;
       });
-    }, 2200);
+    }, MATCH_TICK_MS);
     return () => window.clearInterval(interval);
   }, [aiOpponent.id, isMatchBusy, selectedCountry.id]);
 
@@ -792,7 +813,7 @@ export default function StrikeNationClient() {
     if (!canTransact || !agent) return;
     setBusy("quick-battle");
     startMatchSimulation(
-      "90-minute simulation",
+      "60-second full match",
       "First half",
       `1' Whistle goes. ${agent.name} leads ${selectedCountry.name} into a full match simulation against ${aiOpponent.name} AI.`,
     );
@@ -834,6 +855,7 @@ export default function StrikeNationClient() {
       const displayScore =
         result?.scoreUser !== undefined ? result : fallbackScore(won, `${hash}:${agent.id}:${recommendation.power}:${Date.now()}`);
       const points = result?.points ?? (won ? 187 : 55);
+      await waitForFullTime();
       setScores((current) =>
         current.map((country) =>
           country.id === selectedCountry.id ? { ...country, score: country.score + points } : country,
@@ -861,7 +883,7 @@ export default function StrikeNationClient() {
       setMatchMinute(90);
       setMatchPhase("Full-time");
       playSound(won ? "goal" : "save");
-      window.setTimeout(() => playSound("fulltime"), 260);
+      window.setTimeout(() => playFinalWhistle(), 260);
       evolveSquadAfterMatch(won);
       addCommentary(
         won
@@ -883,7 +905,7 @@ export default function StrikeNationClient() {
     if (!canTransact || !agent?.id) return;
     setBusy("court-create");
     startMatchSimulation(
-      "Open PvP challenge",
+      "60-second PvP match",
       "First half",
       `1' ${profile.name} opens a Challenge Player court. The first whistle is live while the arena waits for a rival wallet.`,
     );
@@ -978,6 +1000,7 @@ export default function StrikeNationClient() {
       if (result) {
         const userWon = result.winner?.toLowerCase() === address?.toLowerCase();
         const points = userWon ? result.winnerPoints : result.loserPoints;
+        await waitForFullTime();
         setScores((current) =>
           current.map((country) =>
             country.id === selectedCountry.id ? { ...country, score: country.score + points } : country,
@@ -1005,7 +1028,7 @@ export default function StrikeNationClient() {
         setMatchMinute(90);
         setMatchPhase("Full-time");
         playSound(userWon ? "goal" : "save");
-        window.setTimeout(() => playSound("fulltime"), 260);
+        window.setTimeout(() => playFinalWhistle(), 260);
         evolveSquadAfterMatch(userWon);
         addCommentary(
           userWon
@@ -1611,7 +1634,7 @@ export default function StrikeNationClient() {
                   <span className="eyebrow">Live commentary</span>
                   <strong>{isMatchBusy ? "Broadcast is live" : "Match desk"}</strong>
                 </div>
-                <span className="match-length">Quick Battle: 90 in-game minutes compressed into the transaction</span>
+                <span className="match-length">Full match: 90 in-game minutes compressed into 60 seconds</span>
                 <button type="button" className="sound-toggle" onClick={() => setSoundEnabled((current) => !current)}>
                   {soundEnabled ? "Sound on" : "Sound off"}
                 </button>

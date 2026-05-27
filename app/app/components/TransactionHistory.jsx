@@ -28,6 +28,7 @@ const liveMarketEvent = parseAbiItem(
 const liveStakeEvent = parseAbiItem(
   "event LiveMatchStakePlaced(uint256 indexed marketId,address indexed player,uint8 indexed pick,uint256 amount,uint256 totalStaked)",
 );
+const zeroAddress = "0x0000000000000000000000000000000000000000";
 
 function shortHash(hash) {
   return `${hash.slice(0, 8)}...${hash.slice(-6)}`;
@@ -60,28 +61,46 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
     try {
       const latest = await publicClient.getBlockNumber();
       const fromBlock = latest > 500000n ? latest - 500000n : 0n;
+      const safeLogs = async (params) => {
+        try {
+          return await publicClient.getLogs({ ...params, fromBlock, toBlock: "latest" });
+        } catch {
+          return [];
+        }
+      };
 
       const [
-        passportMints,
-        squadMints,
-        agentBattles,
-        pvpCreated,
-        pvpJoined,
-        pvpSettledWins,
-        marketIntents,
-        liveMarkets,
-        liveStakes,
+        passportLogs,
+        squadLogs,
+        agentBattleLogs,
+        pvpCreatedLogs,
+        pvpJoinedLogs,
+        pvpSettledLogs,
+        marketIntentLogs,
+        liveMarketLogs,
+        liveStakeLogs,
       ] = await Promise.all([
-        publicClient.getLogs({ address: contracts.FanPassportNFT, event: transferEvent, args: { to: address }, fromBlock, toBlock: "latest" }),
-        publicClient.getLogs({ address: contracts.StrikeAgentNFT, event: squadEvent, args: { owner: address }, fromBlock, toBlock: "latest" }),
-        publicClient.getLogs({ address: contracts.StrikeNationArena, event: agentBattleEvent, args: { player: address }, fromBlock, toBlock: "latest" }),
-        publicClient.getLogs({ address: contracts.StrikeNationArena, event: pvpCreatedEvent, args: { playerA: address }, fromBlock, toBlock: "latest" }),
-        publicClient.getLogs({ address: contracts.StrikeNationArena, event: pvpJoinedEvent, args: { playerB: address }, fromBlock, toBlock: "latest" }),
-        publicClient.getLogs({ address: contracts.StrikeNationArena, event: pvpSettledEvent, args: { winner: address }, fromBlock, toBlock: "latest" }),
-        publicClient.getLogs({ address: contracts.StrikeNationArena, event: marketIntentEvent, args: { proposer: address }, fromBlock, toBlock: "latest" }),
-        publicClient.getLogs({ address: contracts.StrikeNationArena, event: liveMarketEvent, args: { creator: address }, fromBlock, toBlock: "latest" }),
-        publicClient.getLogs({ address: contracts.StrikeNationArena, event: liveStakeEvent, args: { player: address }, fromBlock, toBlock: "latest" }),
+        safeLogs({ address: contracts.FanPassportNFT, event: transferEvent }),
+        safeLogs({ address: contracts.StrikeAgentNFT, event: squadEvent }),
+        safeLogs({ address: contracts.StrikeNationArena, event: agentBattleEvent }),
+        safeLogs({ address: contracts.StrikeNationArena, event: pvpCreatedEvent }),
+        safeLogs({ address: contracts.StrikeNationArena, event: pvpJoinedEvent }),
+        safeLogs({ address: contracts.StrikeNationArena, event: pvpSettledEvent }),
+        safeLogs({ address: contracts.StrikeNationArena, event: marketIntentEvent }),
+        safeLogs({ address: contracts.StrikeNationArena, event: liveMarketEvent }),
+        safeLogs({ address: contracts.StrikeNationArena, event: liveStakeEvent }),
       ]);
+
+      const isWallet = (value) => value?.toLowerCase?.() === lowerAddress;
+      const passportMints = passportLogs.filter((log) => isWallet(log.args.to) && log.args.from?.toLowerCase?.() === zeroAddress);
+      const squadMints = squadLogs.filter((log) => isWallet(log.args.owner));
+      const agentBattles = agentBattleLogs.filter((log) => isWallet(log.args.player));
+      const pvpCreated = pvpCreatedLogs.filter((log) => isWallet(log.args.playerA));
+      const pvpJoined = pvpJoinedLogs.filter((log) => isWallet(log.args.playerB));
+      const pvpSettledWins = pvpSettledLogs.filter((log) => isWallet(log.args.winner));
+      const marketIntents = marketIntentLogs.filter((log) => isWallet(log.args.proposer));
+      const liveMarkets = liveMarketLogs.filter((log) => isWallet(log.args.creator));
+      const liveStakes = liveStakeLogs.filter((log) => isWallet(log.args.player));
 
       const activity = [
         ...passportMints.map((log) => ({

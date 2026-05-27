@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { wrapFetchWithPaymentFromConfig } from "@okxweb3/x402-fetch";
 import { ExactEvmScheme, toClientEvmSigner } from "@okxweb3/x402-evm";
 import { decodeEventLog, encodePacked, keccak256, parseAbiItem, parseUnits, stringToHex } from "viem";
@@ -83,6 +83,22 @@ const formationDots = [
   { side: "away", role: "LW", x: 47, y: 25 },
   { side: "away", role: "ST", x: 42, y: 50 },
   { side: "away", role: "RW", x: 47, y: 76 },
+];
+
+const commentaryTemplates = [
+  ({ agentName, country, opponent, direction, power, minute }) =>
+    `${minute}' ${agentName} checks the keeper twice. ${country} are shaping the attack toward the ${direction} lane.`,
+  ({ country, opponent, minute }) => `${minute}' ${country} FanDAO pushes up. ${opponent} AI is leaving space behind midfield.`,
+  ({ agentName, risk, minute }) => `${minute}' ${agentName} slows the tempo. The risk meter says ${risk}, but the body language says confidence.`,
+  ({ country, power, minute }) => `${minute}' ${country} load the strike with ${power} power. That is not a casual shot.`,
+  ({ opponent, minute }) => `${minute}' ${opponent} AI shifts the keeper early. The arena notices that little tell.`,
+  ({ agentName, minute }) => `${minute}' ${agentName} fakes near post, then waits for the chain-side decision.`,
+  ({ country, minute }) => `${minute}' The ${country} dots are moving as a unit now. The press is cleaner than before.`,
+  ({ opponent, minute }) => `${minute}' ${opponent} AI tries to crowd the center circle, but the wings are open.`,
+  ({ country, direction, minute }) => `${minute}' ${country} keep finding the ${direction} channel. The captain call is starting to make sense.`,
+  ({ agentName, minute }) => `${minute}' ${agentName} is not rushing this. Tiny pause, big pressure.`,
+  ({ country, minute }) => `${minute}' A wave of ${country} shirts steps forward. The crowd can feel a chance coming.`,
+  ({ opponent, minute }) => `${minute}' ${opponent} AI almost reads it, but the timing is half a beat late.`,
 ];
 
 function playMatchSound(kind) {
@@ -296,6 +312,7 @@ export default function StrikeNationClient() {
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient({ chainId: xLayer.id });
+  const lastCommentaryRef = useRef("");
 
   const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [passportMinted, setPassportMinted] = useState(false);
@@ -331,6 +348,8 @@ export default function StrikeNationClient() {
     "The arena is quiet for now. Pick a country, trust the AI Captain, and wait for the whistle.",
   ]);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [matchMinute, setMatchMinute] = useState(0);
+  const [matchFormat, setMatchFormat] = useState("Compressed 90");
   const [selectedFixture, setSelectedFixture] = useState(liveFixtures[0]);
   const [liveMarketId, setLiveMarketId] = useState("");
   const [livePick, setLivePick] = useState(0);
@@ -381,25 +400,41 @@ export default function StrikeNationClient() {
     setCommentaryFeed((current) => [line, ...current].slice(0, 5));
   }
 
+  function addBroadcastLine(nextMinute = matchMinute) {
+    const context = {
+      agentName: agent?.name || "Your striker",
+      country: selectedCountry.name,
+      opponent: aiOpponent.name,
+      direction: recommendation.direction,
+      power: recommendation.power,
+      risk: recommendation.risk,
+      minute: Math.max(1, Math.min(nextMinute, 90)),
+    };
+    const pool = commentaryTemplates
+      .map((template) => template(context))
+      .filter((line) => line !== lastCommentaryRef.current);
+    const indexSeed = (nextMinute + context.agentName.length + context.country.length + commentaryFeed.length) % pool.length;
+    const line = pool[indexSeed] || commentaryTemplates[0](context);
+    lastCommentaryRef.current = line;
+    addCommentary(line);
+  }
+
   function playSound(kind) {
     if (soundEnabled) playMatchSound(kind);
   }
 
   useEffect(() => {
     if (!isMatchBusy) return undefined;
-    const lines = [
-      `${agent?.name || "Your striker"} scans the keeper and waits for the AI signal.`,
-      `${selectedCountry.name} FanDAO pushes higher. The midfield dots are squeezing the lane.`,
-      `The ball is moving quickly now. ${aiOpponent.name} AI is trying to read the shot.`,
-      `Claude's tactical call is live: ${recommendation.direction} with ${recommendation.power} power.`,
-    ];
-    let index = 0;
     const interval = window.setInterval(() => {
-      addCommentary(lines[index % lines.length]);
-      index += 1;
-    }, 2400);
+      setMatchMinute((current) => {
+        const jump = 5 + ((current + selectedCountry.id + aiOpponent.id) % 9);
+        const nextMinute = Math.min(current + jump, 90);
+        addBroadcastLine(nextMinute);
+        return nextMinute;
+      });
+    }, 2200);
     return () => window.clearInterval(interval);
-  }, [agent?.name, aiOpponent.name, isMatchBusy, recommendation.direction, recommendation.power, selectedCountry.name]);
+  }, [aiOpponent.id, isMatchBusy, selectedCountry.id]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(profileKey(address));
@@ -554,6 +589,8 @@ export default function StrikeNationClient() {
   async function runQuickBattle() {
     if (!canTransact || !agent) return;
     setBusy("quick-battle");
+    setMatchMinute(1);
+    setMatchFormat("Compressed 90");
     playSound("whistle");
     addCommentary(`Whistle goes. ${agent.name} leads ${selectedCountry.name} into a Quick Battle against ${aiOpponent.name} AI.`);
     setLastMatch({
@@ -618,6 +655,7 @@ export default function StrikeNationClient() {
         scoreAway: displayScore.scoreAgent,
         won,
       });
+      setMatchMinute(90);
       playSound(won ? "goal" : "save");
       addCommentary(
         won
@@ -638,6 +676,8 @@ export default function StrikeNationClient() {
   async function createCourtMatch() {
     if (!canTransact || !agent?.id) return;
     setBusy("court-create");
+    setMatchMinute(1);
+    setMatchFormat("Open challenge");
     playSound("whistle");
     addCommentary(`${profile.name} opens a Challenge Player court. Waiting for a rival wallet to step in.`);
     const strategyHash = keccak256(
@@ -668,6 +708,8 @@ export default function StrikeNationClient() {
   async function joinCourtMatch() {
     if (!canTransact || !agent?.id || !joinMatchId) return;
     setBusy("court-join");
+    setMatchMinute(45);
+    setMatchFormat("PvP challenge");
     playSound("whistle");
     addCommentary(`${profile.name} joins Court Match #${joinMatchId}. Both squads are locked in.`);
     const strategyHash = keccak256(
@@ -695,6 +737,8 @@ export default function StrikeNationClient() {
     const matchId = courtMatchId || joinMatchId;
     if (!canTransact || !matchId) return;
     setBusy("court-settle");
+    setMatchMinute(75);
+    setMatchFormat("Final phase");
     playSound("kick");
     addCommentary(`Court Match #${matchId} is settling. The dots collapse into the box.`);
     setLastMatch({
@@ -742,6 +786,7 @@ export default function StrikeNationClient() {
           scoreAway: result.scoreB,
           won: userWon,
         });
+        setMatchMinute(90);
         playSound(userWon ? "goal" : "save");
         addCommentary(
           userWon
@@ -1281,8 +1326,12 @@ export default function StrikeNationClient() {
             </div>
             <div className={`football-court ${isMatchBusy ? "is-battling" : ""}`} aria-label="Autonomous football court">
               <div className="match-status">
-                <span>{isMatchBusy ? "Live action" : lastMatch ? "Last result" : "Ready"}</span>
+                <span>{isMatchBusy ? `Live action / ${matchMinute}'` : lastMatch ? `Last result / ${matchMinute || 90}'` : "Ready"}</span>
                 <strong>{isMatchBusy ? lastMatch?.phase || "Agents are moving" : lastMatch?.phase || "Choose a battle mode"}</strong>
+              </div>
+              <div className="match-clock">
+                <strong>{matchMinute || 0}'</strong>
+                <span>{matchFormat}</span>
               </div>
               <div className="goal goal-left">Goal</div>
               <div className="goal goal-right">Goal</div>
@@ -1329,6 +1378,7 @@ export default function StrikeNationClient() {
                   <span className="eyebrow">Live commentary</span>
                   <strong>{isMatchBusy ? "Broadcast is live" : "Match desk"}</strong>
                 </div>
+                <span className="match-length">Quick Battle: 90 in-game minutes compressed into the transaction</span>
                 <button type="button" className="sound-toggle" onClick={() => setSoundEnabled((current) => !current)}>
                   {soundEnabled ? "Sound on" : "Sound off"}
                 </button>

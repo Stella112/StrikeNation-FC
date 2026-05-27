@@ -720,6 +720,32 @@ select:focus {
   font-size: 0.84rem;
 }
 
+.match-clock {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  z-index: 5;
+  display: grid;
+  min-width: 82px;
+  padding: 8px 10px;
+  border: 1px solid rgba(250, 246, 232, 0.16);
+  border-radius: 8px;
+  background: rgba(8, 9, 7, 0.72);
+  text-align: center;
+}
+
+.match-clock strong {
+  color: var(--gold);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.match-clock span {
+  color: #eee5ca;
+  font-size: 0.64rem;
+  line-height: 1.15;
+}
+
 .center-circle {
   position: absolute;
   width: 96px;
@@ -979,9 +1005,9 @@ select:focus {
 }
 
 .commentary-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
 }
 
@@ -999,6 +1025,13 @@ select:focus {
   color: var(--ink);
   font-weight: 800;
   cursor: pointer;
+}
+
+.match-length {
+  max-width: 260px;
+  color: #eee5ca;
+  font-size: 0.78rem;
+  line-height: 1.25;
 }
 
 .commentary-lines {
@@ -1368,5 +1401,15 @@ select:focus {
   .share-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .commentary-head {
+    grid-template-columns: 1fr;
+  }
+
+  .match-clock {
+    top: auto;
+    right: 14px;
+    bottom: 14px;
   }
 }

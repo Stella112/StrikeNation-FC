@@ -227,6 +227,10 @@ function profileKey(address) {
   return address ? `strikenation-profile-${address.toLowerCase()}` : "strikenation-profile-guest";
 }
 
+function historyKey(address) {
+  return address ? `strikenation-history-${address.toLowerCase()}` : "strikenation-history-guest";
+}
+
 function parseAgentId(receipt) {
   const eventAbi = parseAbiItem(
     "event StrikeAgentCreated(address indexed owner,uint256 indexed agentId,uint8 indexed country,string name,string playstyle,bytes32 promptHash)",
@@ -415,6 +419,7 @@ export default function StrikeNationClient() {
   const [joinMatchId, setJoinMatchId] = useState("");
   const [battleMode, setBattleMode] = useState("quick");
   const [lastMatch, setLastMatch] = useState(null);
+  const [matchHistory, setMatchHistory] = useState([]);
   const [commentaryFeed, setCommentaryFeed] = useState([
     "The arena is quiet for now. Pick a country, trust the AI Captain, and wait for the whistle.",
   ]);
@@ -597,6 +602,26 @@ export default function StrikeNationClient() {
     return new Promise((resolve) => window.setTimeout(resolve, remaining));
   }
 
+  function saveMatchHistory(nextHistory) {
+    setMatchHistory(nextHistory);
+    window.localStorage.setItem(historyKey(address), JSON.stringify(nextHistory));
+  }
+
+  function recordMatch(entry) {
+    const nextEntry = {
+      id: `${Date.now()}-${entry.mode}`,
+      playedAt: new Date().toISOString(),
+      agentName: agent?.name || agentName,
+      country: selectedCountry.name,
+      ...entry,
+    };
+    saveMatchHistory([nextEntry, ...matchHistory].slice(0, 12));
+  }
+
+  function clearMatchHistory() {
+    saveMatchHistory([]);
+  }
+
   function startMatchSimulation(format, phase, openingLine) {
     setMatchMinute(1);
     setMatchFormat(format);
@@ -613,7 +638,7 @@ export default function StrikeNationClient() {
   function evolveSquadAfterMatch(won) {
     if (!squad.length) {
       setFormationMode(won ? "attacking" : "defensive");
-      return;
+      return [];
     }
 
     const primaryIndex = won ? 9 : 6;
@@ -641,6 +666,7 @@ export default function StrikeNationClient() {
         ? `${squad[primaryIndex]?.name || "Your striker"} evolves after full-time and pushes the squad into an attacking shape.`
         : `${squad[secondaryIndex]?.name || "Your defender"} adapts after the loss and drops the squad into a defensive shape.`,
     });
+    return evolvedIndexes.map((index) => `${squad[index]?.name || `Agent #${index + 1}`} -> ${evolvedRoles[squad[index]?.role] || "Evolved role"}`);
   }
 
   useEffect(() => {
@@ -673,6 +699,11 @@ export default function StrikeNationClient() {
       avatar: selectedCountry.flag,
     });
   }, [address, selectedCountry.flag]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(historyKey(address));
+    setMatchHistory(stored ? JSON.parse(stored) : []);
+  }, [address]);
 
   function updateProfile(nextProfile) {
     setProfile(nextProfile);
@@ -884,12 +915,23 @@ export default function StrikeNationClient() {
       setMatchPhase("Full-time");
       playSound(won ? "goal" : "save");
       window.setTimeout(() => playFinalWhistle(), 260);
-      evolveSquadAfterMatch(won);
+      const evolved = evolveSquadAfterMatch(won);
       addCommentary(
         won
           ? `90' Full-time. ${selectedCountry.name} take it ${displayScore.scoreUser}-${displayScore.scoreAgent}; the squad evolves into a more aggressive shape.`
           : `90' Full-time. ${aiOpponent.name} AI reads the match and takes it ${displayScore.scoreAgent}-${displayScore.scoreUser}; the squad adapts positions for the next run.`,
       );
+      recordMatch({
+        mode: "Quick Battle",
+        result: won ? "Win" : "Loss",
+        home: selectedCountry.name,
+        away: `${aiOpponent.name} AI`,
+        scoreHome: displayScore.scoreUser,
+        scoreAway: displayScore.scoreAgent,
+        points,
+        txHash: hash,
+        evolved,
+      });
       const scoreLine =
         displayScore.scoreUser !== undefined ? ` ${selectedCountry.name} ${displayScore.scoreUser}-${displayScore.scoreAgent} ${aiOpponent.name} AI.` : "";
       setMessage(`${agent.name} finished a Quick Battle against ${aiOpponent.name} AI.${scoreLine} ${hash}`);
@@ -1029,12 +1071,23 @@ export default function StrikeNationClient() {
         setMatchPhase("Full-time");
         playSound(userWon ? "goal" : "save");
         window.setTimeout(() => playFinalWhistle(), 260);
-        evolveSquadAfterMatch(userWon);
+        const evolved = evolveSquadAfterMatch(userWon);
         addCommentary(
           userWon
             ? `90' Full-time on-chain. Your squad wins ${result.scoreA}-${result.scoreB} and two agents evolve their positions.`
             : `90' Full-time on-chain. Rival wallet takes it ${result.scoreA}-${result.scoreB}; your squad reshapes for the rematch.`,
         );
+        recordMatch({
+          mode: "Challenge Player",
+          result: userWon ? "Win" : "Loss",
+          home: selectedCountry.name,
+          away: "Rival wallet",
+          scoreHome: result.scoreA,
+          scoreAway: result.scoreB,
+          points,
+          txHash: hash,
+          evolved,
+        });
         setMessage(`Court Match #${matchId} settled autonomously: ${result.scoreA}-${result.scoreB}. ${hash}`);
       } else {
         setMessage(`Court Match #${matchId} settled on X Layer. ${hash}`);
@@ -1755,6 +1808,50 @@ export default function StrikeNationClient() {
               ) : (
                 message
               )}
+            </div>
+
+            <div className="history-panel">
+              <div className="history-head">
+                <div>
+                  <span className="eyebrow">Previous matches</span>
+                  <h3>Match History</h3>
+                </div>
+                <button className="secondary-btn" type="button" disabled={!matchHistory.length} onClick={clearMatchHistory}>
+                  Clear
+                </button>
+              </div>
+              <div className="history-list">
+                {matchHistory.length ? (
+                  matchHistory.map((match) => (
+                    <article className={`history-card ${match.result.toLowerCase()}`} key={match.id}>
+                      <div>
+                        <span>{match.mode}</span>
+                        <strong>
+                          {match.home} {match.scoreHome}-{match.scoreAway} {match.away}
+                        </strong>
+                        <small>
+                          {new Date(match.playedAt).toLocaleString()} / {match.agentName}
+                        </small>
+                      </div>
+                      <div className="history-meta">
+                        <strong>{match.result}</strong>
+                        <span>+{match.points} pts</span>
+                        {match.txHash && (
+                          <a href={explorerTx(match.txHash)} target="_blank" rel="noreferrer">
+                            Tx
+                          </a>
+                        )}
+                      </div>
+                      {match.evolved?.length > 0 && <p>{match.evolved.join(" / ")}</p>}
+                    </article>
+                  ))
+                ) : (
+                  <div className="history-empty">
+                    <strong>No previous matches yet</strong>
+                    <span>Finish a Quick Battle or settle a Challenge Player match and it will appear here.</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </section>

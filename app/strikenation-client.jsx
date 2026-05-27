@@ -60,6 +60,13 @@ const liveFixtures = [
   },
 ];
 
+const worldCupFeatures = [
+  "Claude posts live outcome reads once real World Cup matches begin.",
+  "Fans approve and post market intents for Home, Draw, Away, goals, cards, and late-match momentum.",
+  "USDT0 staking routes through X Layer contracts with Exchange OS-ready settlement hooks.",
+  "Country FanDAOs earn reputation when their agents call real match moments correctly.",
+];
+
 const formationDots = [
   { side: "home", role: "GK", x: 9, y: 50 },
   { side: "home", role: "LB", x: 20, y: 24 },
@@ -1291,7 +1298,7 @@ export default function StrikeNationClient() {
           <a href="#fandao">FanDAO</a>
           <a href="#agent">Agent</a>
           <a href="#battle">Battle</a>
-          <a href="#live">Live</a>
+          <a href="#worldcup">World Cup</a>
           <a href="#market">Market</a>
         </nav>
 
@@ -1452,15 +1459,29 @@ export default function StrikeNationClient() {
           </div>
         </section>
 
-        <section className="panel live-match-hub" id="live">
+        <section className="panel live-match-hub worldcup-page" id="worldcup">
           <div className="section-head">
             <div>
-              <span className="eyebrow">Live World Cup layer</span>
-              <h2>Match Intent + USDT0 Stake</h2>
+              <span className="eyebrow">Real-world World Cup layer</span>
+              <h2>Coming Soon</h2>
             </div>
-            <button className="primary-btn small" disabled={!canTransact || !hasPassport || busy === "live-intent"} onClick={postLiveMatchIntent}>
-              {busy === "live-intent" ? "Posting..." : "Post Live Intent"}
-            </button>
+            <span className="coming-soon-badge">World Cup not live yet</span>
+          </div>
+
+          <div className="worldcup-hero-card">
+            <div>
+              <span className="eyebrow">Real matches, real intents</span>
+              <h3>When the World Cup starts, this becomes the live outcome room.</h3>
+              <p>
+                The current arena is playable today. This dedicated page is reserved for real-life World Cup matches:
+                Claude will watch match context, generate outcome reads, and let users approve on-chain intents and USDT0
+                stakes once fixtures are active.
+              </p>
+            </div>
+            <div className="worldcup-countdown">
+              <strong>2026</strong>
+              <span>World Cup outcomes layer</span>
+            </div>
           </div>
 
           <div className="live-grid">
@@ -1482,14 +1503,19 @@ export default function StrikeNationClient() {
             </div>
 
             <div className="live-market-card">
-              <span className="eyebrow">Market intent</span>
+              <span className="eyebrow">Future market intent</span>
               <h3>
                 {selectedFixture.home} vs {selectedFixture.away}
               </h3>
               <p>
-                AI Captain watches the real fixture, posts a verifiable outcome intent, then fans stake USDT0 on
-                Home, Draw, or Away. Resolution can be handled by an oracle/operator when real World Cup data is live.
+                Preview only for now. Once the real World Cup is live, Claude can post outcome prompts and users can
+                approve market intents on X Layer instead of relying on simulated battle context.
               </p>
+              <div className="worldcup-feature-list">
+                {worldCupFeatures.map((feature) => (
+                  <span key={feature}>{feature}</span>
+                ))}
+              </div>
               <div className="intent-line">
                 <span>Fixture</span>
                 <strong>{selectedFixture.id}</strong>
@@ -1500,7 +1526,12 @@ export default function StrikeNationClient() {
               </div>
               <label>
                 Market ID
-                <input value={liveMarketId} onChange={(event) => setLiveMarketId(event.target.value)} placeholder="Post intent or paste market ID" />
+                <input
+                  value={liveMarketId}
+                  onChange={(event) => setLiveMarketId(event.target.value)}
+                  placeholder="Coming soon when real matches are live"
+                  disabled
+                />
               </label>
             </div>
 
@@ -1513,6 +1544,7 @@ export default function StrikeNationClient() {
                     key={label}
                     className={`pick-card ${livePick === index ? "selected" : ""}`}
                     onClick={() => setLivePick(index)}
+                    disabled
                   >
                     {label}
                   </button>
@@ -1520,14 +1552,14 @@ export default function StrikeNationClient() {
               </div>
               <label>
                 Stake amount
-                <input value={stakeAmount} onChange={(event) => setStakeAmount(event.target.value)} inputMode="decimal" />
+                <input value={stakeAmount} onChange={(event) => setStakeAmount(event.target.value)} inputMode="decimal" disabled />
               </label>
-              <button className="primary-btn" disabled={!canTransact || !liveMarketId || busy === "live-stake"} onClick={stakeLiveMatch}>
-                {busy === "live-stake" ? "Staking..." : "Approve + Stake USDT0"}
+              <button className="primary-btn" disabled>
+                Coming Soon
               </button>
               <p className="stake-note">
-                Uses USDT0 on X Layer. This MVP locks stakes in the arena contract and supports pro-rata winner claims
-                after market resolution.
+                USDT0 staking is already designed in the contract path, but the public World Cup page stays locked until
+                real fixtures and resolution data are available.
               </p>
             </div>
           </div>

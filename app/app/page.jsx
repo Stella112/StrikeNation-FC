@@ -1,177 +1,138 @@
 import Link from "next/link";
 
+const stats = [
+  { label: "Squad OVR", value: "94.2", delta: "+1.4", tone: "text-success" },
+  { label: "Win streak", value: "5W", delta: "Live form", tone: "text-accent" },
+  { label: "Country PTS", value: "1,840", delta: "+212", tone: "text-success" },
+  { label: "$STRIKE", value: "12,450", delta: "+580", tone: "text-success" },
+];
+
+const liveMatches = [
+  { home: "NGA", away: "BRA", score: "2 - 1", minute: "Live 67'" },
+  { home: "ARG", away: "ENG", score: "0 - 0", minute: "44'" },
+  { home: "JPN", away: "KOR", score: "3 - 2", minute: "FT" },
+  { home: "IDN", away: "CHN", score: "1 - 0", minute: "Live 22'" },
+];
+
+const activity = [
+  { type: "Goal", copy: "Agent #9 EAGLE scored vs 0xAlpha...B2", time: "12m" },
+  { type: "Upgrade", copy: "Tier 1 upgrade applied to Agent #10", time: "1h" },
+  { type: "Vote", copy: "Nigeria FanDAO voted: 3-4-3 vs Brazil", time: "3h" },
+  { type: "Service", copy: "x402 service Heat Map Scout purchased", time: "8h" },
+];
+
 export default function ArenaDashboard() {
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-      
-      {/* Top Hero Card */}
-      <section className="bg-card border border-border p-6 rounded-sm flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h1 className="font-display text-4xl uppercase italic mb-2">Welcome back, Adekunle</h1>
-          <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-            Nigeria FanDAO | Rank #3 | Squad Level 2
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link href="/app/battle/quick" className="bg-primary text-primary-foreground font-mono text-[10px] uppercase tracking-widest font-bold px-5 py-3 rounded-sm hover:opacity-90">
-            Quick Battle
-          </Link>
-          <Link href="/app/battle/pvp" className="bg-secondary text-secondary-foreground font-mono text-[10px] uppercase tracking-widest font-bold px-5 py-3 rounded-sm hover:opacity-90">
-            Challenge Player
-          </Link>
-          <Link href="/app/squad" className="border border-border bg-background font-mono text-[10px] uppercase tracking-widest font-bold px-5 py-3 rounded-sm hover:bg-muted hover:text-foreground">
-            View Squad
+    <div className="mx-auto max-w-[1560px] p-5 md:p-10 space-y-10">
+      <section className="border-b border-border pb-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              Manager dashboard
+            </div>
+            <h1 className="font-display text-5xl uppercase italic leading-none md:text-7xl">
+              Welcome back, <span className="text-primary">Coach</span>
+            </h1>
+            <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
+              Real-time pulse of your squad, country and the StrikeNation arena.
+            </p>
+          </div>
+          <Link href="/app/battle/quick" className="inline-flex items-center justify-center bg-primary px-7 py-4 font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-primary-foreground hover:opacity-90">
+            Play Match
           </Link>
         </div>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
-        
-        {/* Left Column */}
-        <div className="space-y-6">
-          
-          {/* A. My Squad Panel */}
-          <section className="bg-card border border-border p-6 rounded-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-display text-2xl uppercase italic">My Squad</h2>
-              <Link href="/app/squad" className="font-mono text-[9px] uppercase tracking-widest underline text-muted-foreground hover:text-primary">Manage Squad →</Link>
-            </div>
-            <div className="relative aspect-[16/9] md:aspect-[2/1] bg-pitch/10 border border-pitch/30 rounded-sm overflow-hidden flex items-center justify-center">
-              <div className="absolute inset-0 flex flex-col justify-around py-4 opacity-80 pointer-events-none">
-                <div className="flex justify-center gap-16"><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div></div>
-                <div className="flex justify-center gap-24"><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div></div>
-                <div className="flex justify-center gap-12"><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div></div>
-                <div className="flex justify-center gap-6"><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div><div className="size-6 rounded-full bg-primary ring-2 ring-background"></div></div>
-              </div>
-              <div className="z-10 text-center font-mono text-[10px] uppercase tracking-widest bg-background/80 px-4 py-2 border border-border backdrop-blur-sm">
-                4-3-3 Attack Formation Active
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="text-xs font-mono uppercase tracking-widest bg-muted p-2 border border-border">ST — Naija Finisher — 92 OVR</div>
-              <div className="text-xs font-mono uppercase tracking-widest bg-muted p-2 border border-border">GK — Wall Keeper — 87 OVR</div>
-              <div className="text-xs font-mono uppercase tracking-widest bg-muted p-2 border border-border">CAM — Data Captain — 90 OVR</div>
-            </div>
-          </section>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.label} className="border border-border bg-card p-6">
+            <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{stat.label}</div>
+            <div className="mt-2 font-display text-5xl uppercase italic leading-none">{stat.value}</div>
+            <div className={`mt-3 font-mono text-[10px] uppercase tracking-widest ${stat.tone}`}>{stat.delta}</div>
+          </div>
+        ))}
+      </section>
 
-          {/* B. Arena Panel */}
-          <section className="bg-card border border-border p-6 rounded-sm">
-            <h2 className="font-display text-2xl uppercase italic mb-6">Battle Arena</h2>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="border border-border p-5 flex flex-col justify-between bg-background hover:border-primary transition-colors group">
-                <div>
-                  <h3 className="font-display text-xl uppercase italic mb-2">Quick Battle</h3>
-                  <p className="text-xs text-muted-foreground mb-4">Battle an AI squad instantly. Good for solo demo, quick gameplay, no waiting, practice + earning points.</p>
-                </div>
-                <Link href="/app/battle/quick" className="bg-primary text-primary-foreground font-mono text-[9px] uppercase tracking-widest font-bold px-4 py-2 text-center rounded-sm group-hover:opacity-90">Start Quick Battle</Link>
-              </div>
-              <div className="border border-border p-5 flex flex-col justify-between bg-background hover:border-secondary transition-colors group">
-                <div>
-                  <h3 className="font-display text-xl uppercase italic mb-2">Challenge Player</h3>
-                  <p className="text-xs text-muted-foreground mb-4">Battle another real wallet. Good for PvP, country rivalries, stronger leaderboard points.</p>
-                </div>
-                <div className="flex gap-2">
-                  <Link href="/app/battle/pvp" className="flex-1 bg-secondary text-secondary-foreground font-mono text-[9px] uppercase tracking-widest font-bold px-4 py-2 text-center rounded-sm group-hover:opacity-90">Create</Link>
-                  <Link href="/app/battle/pvp" className="flex-1 border border-secondary text-foreground font-mono text-[9px] uppercase tracking-widest font-bold px-4 py-2 text-center rounded-sm hover:bg-secondary hover:text-secondary-foreground">Join</Link>
-                </div>
-              </div>
-            </div>
-          </section>
-          
-          {/* F. Battle History */}
-          <section className="bg-card border border-border p-6 rounded-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-display text-2xl uppercase italic">Battle History</h2>
-              <Link href="/app/history" className="font-mono text-[9px] uppercase tracking-widest underline text-muted-foreground hover:text-primary">View Full History →</Link>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between border border-border bg-background p-3">
-                <span className="font-mono text-[10px] uppercase tracking-widest">Nigeria vs Brazil</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-success font-bold">Won 3–1</span>
-              </div>
-              <div className="flex items-center justify-between border border-border bg-background p-3">
-                <span className="font-mono text-[10px] uppercase tracking-widest">Nigeria vs Argentina</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-destructive font-bold">Lost 1–2</span>
-              </div>
-              <div className="flex items-center justify-between border border-border bg-background p-3">
-                <span className="font-mono text-[10px] uppercase tracking-widest">Nigeria vs Underdog</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-success font-bold">Won 2–0</span>
-              </div>
-            </div>
-          </section>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <DashboardCard
+          href="/app/battle/quick"
+          accent="bg-primary"
+          title="Play Match"
+          text="Instant AI battle or two-wallet PvP challenge with on-chain settlement."
+        />
+        <DashboardCard
+          href="/app/squad"
+          accent="bg-secondary"
+          title="Tune Squad"
+          text="Edit your 11 Strike Agents, formations, tactics and AI brain weights."
+        />
+        <DashboardCard
+          href="/app/scout"
+          accent="bg-accent"
+          title="Marketplace"
+          text="x402-powered premium agent services, scouts and tactical packs."
+        />
+      </section>
 
+      <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+        <div className="border border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <h2 className="font-display text-3xl uppercase italic">Live Matches</h2>
+            <Link href="/app/worldcup" className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground hover:text-primary">
+              View all -&gt;
+            </Link>
+          </div>
+          <div>
+            {liveMatches.map((match) => (
+              <div key={`${match.home}-${match.away}`} className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-border px-5 py-5 last:border-b-0">
+                <div className="flex items-center gap-4">
+                  <span className="font-display text-2xl uppercase italic">{match.home}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">vs</span>
+                  <span className="font-display text-2xl uppercase italic">{match.away}</span>
+                </div>
+                <div className="text-right">
+                  <div className="font-display text-4xl uppercase italic leading-none">{match.score}</div>
+                  <div className="mt-1 font-mono text-[10px] uppercase tracking-widest text-primary">{match.minute}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Right Column */}
-        <div className="space-y-6">
-          
-          {/* C. AI Strategy Panel */}
-          <section className="bg-card border border-border p-6 rounded-sm bg-primary/5">
-            <h2 className="font-display text-xl uppercase italic mb-4 flex items-center gap-2 text-primary">
-              <span className="animate-pulse">●</span> AI Strategy
-            </h2>
-            <div className="border border-primary/20 bg-background p-4 mb-4">
-              <p className="text-sm italic text-muted-foreground mb-3">"Use 4-3-3 Attack. Opponent's left side is weak. Push through the right wing with medium risk."</p>
-              <div className="font-mono text-[10px] uppercase tracking-widest opacity-60">Confidence: 87%</div>
-            </div>
-            <div className="flex gap-2">
-              <button className="flex-1 bg-primary text-primary-foreground font-mono text-[9px] uppercase tracking-widest font-bold px-3 py-2 rounded-sm hover:opacity-90">Accept</button>
-              <button className="flex-1 border border-border bg-background font-mono text-[9px] uppercase tracking-widest font-bold px-3 py-2 rounded-sm hover:bg-muted">Regenerate</button>
-            </div>
-          </section>
-
-          {/* D. Country Leaderboard Panel */}
-          <section className="bg-card border border-border p-6 rounded-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-xl uppercase italic">Leaderboard</h2>
-              <Link href="/app/leaderboard" className="font-mono text-[9px] uppercase tracking-widest underline text-muted-foreground hover:text-primary">View All →</Link>
-            </div>
-            <div className="border border-border">
-              <div className="grid grid-cols-[30px_1fr_60px] p-2 bg-muted font-mono text-[9px] uppercase tracking-widest text-muted-foreground border-b border-border">
-                <span>Rk</span><span>Country</span><span className="text-right">Pts</span>
-              </div>
-              <div className="grid grid-cols-[30px_1fr_60px] p-2 bg-background font-mono text-[10px] uppercase tracking-widest border-b border-border">
-                <span className="text-primary">1</span><span>Brazil</span><span className="text-right font-bold">142k</span>
-              </div>
-              <div className="grid grid-cols-[30px_1fr_60px] p-2 bg-background font-mono text-[10px] uppercase tracking-widest border-b border-border">
-                <span>2</span><span>Argentina</span><span className="text-right font-bold">131k</span>
-              </div>
-              <div className="grid grid-cols-[30px_1fr_60px] p-2 bg-primary/10 text-primary font-mono text-[10px] uppercase tracking-widest border-b border-border">
-                <span>3</span><span>Nigeria</span><span className="text-right font-bold">128k</span>
-              </div>
-              <div className="grid grid-cols-[30px_1fr_60px] p-2 bg-background font-mono text-[10px] uppercase tracking-widest">
-                <span>4</span><span>England</span><span className="text-right font-bold">97k</span>
-              </div>
-            </div>
-          </section>
-
-          {/* E. Side Market Intents Panel */}
-          <section className="bg-card border border-border p-6 rounded-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-xl uppercase italic">Side Predictions</h2>
-              <Link href="/app/markets" className="font-mono text-[9px] uppercase tracking-widest underline text-muted-foreground hover:text-primary">Markets →</Link>
-            </div>
-            <div className="space-y-3">
-              <div className="border border-border p-3 bg-background group">
-                <p className="text-xs mb-2">Will Nigeria beat Brazil today?</p>
-                <div className="flex gap-2">
-                  <button className="flex-1 bg-muted font-mono text-[9px] uppercase tracking-widest py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">Back</button>
-                  <button className="flex-1 bg-muted font-mono text-[9px] uppercase tracking-widest py-1.5 hover:bg-foreground hover:text-background transition-colors">View Intent</button>
+        <div className="border border-border bg-card">
+          <div className="border-b border-border px-5 py-4">
+            <h2 className="font-display text-3xl uppercase italic">Activity</h2>
+          </div>
+          <div>
+            {activity.map((item) => (
+              <div key={`${item.type}-${item.time}`} className="border-b border-border px-5 py-5 last:border-b-0">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary">{item.type}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{item.time}</span>
                 </div>
+                <p className="text-base font-semibold">{item.copy}</p>
               </div>
-              <div className="border border-border p-3 bg-background group">
-                <p className="text-xs mb-2">Which country enters top 3 this week?</p>
-                <div className="flex gap-2">
-                  <button className="flex-1 bg-muted font-mono text-[9px] uppercase tracking-widest py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">Back</button>
-                  <button className="flex-1 bg-muted font-mono text-[9px] uppercase tracking-widest py-1.5 hover:bg-foreground hover:text-background transition-colors">View Intent</button>
-                </div>
-              </div>
-            </div>
-          </section>
-
+            ))}
+          </div>
         </div>
-
-      </div>
+      </section>
     </div>
+  );
+}
+
+function DashboardCard({ href, accent, title, text }) {
+  return (
+    <Link href={href} className="group min-h-52 border border-border bg-card p-7 transition-colors hover:border-primary">
+      <div className={`mb-6 grid h-12 w-12 place-items-center rounded-sm ${accent} font-display text-xl text-primary-foreground`}>
+        //
+      </div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-display text-4xl uppercase italic leading-none">{title}</h2>
+          <p className="mt-4 max-w-lg text-base leading-relaxed text-muted-foreground">{text}</p>
+        </div>
+        <span className="font-mono text-xl text-muted-foreground transition-transform group-hover:-translate-y-1 group-hover:translate-x-1">↗</span>
+      </div>
+    </Link>
   );
 }

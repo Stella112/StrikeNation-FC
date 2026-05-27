@@ -31,6 +31,19 @@ http://localhost:5173
 
 See `DEPLOYMENT.md`.
 
+### Deployed mainnet contracts
+
+StrikeNation FC is deployed on X Layer mainnet (`chainId: 196`).
+
+| Contract | Purpose | Address |
+| --- | --- | --- |
+| `FanPassportNFT` | Country FanDAO passport NFT minted once per fan wallet | [`0x339ad5eDFDefe246f286e052ED7B700F59E80d86`](https://www.okx.com/web3/explorer/xlayer/address/0x339ad5eDFDefe246f286e052ED7B700F59E80d86) |
+| `StrikeAgentNFT` | 11-player AI Strike Agent squad NFT contract | [`0xa89cD378fACA30c787dC1C96Ce2B34632650b46E`](https://www.okx.com/web3/explorer/xlayer/address/0xa89cD378fACA30c787dC1C96Ce2B34632650b46E) |
+| `StrikeNationArena` | Quick Battle, PvP court matches, leaderboards, market intents, live match staking | [`0xdfd726FF311a888347f1f90E7C18Fdcbf5F96B77`](https://www.okx.com/web3/explorer/xlayer/address/0xdfd726FF311a888347f1f90E7C18Fdcbf5F96B77) |
+| `USDT0` | X Layer token used for live match staking/payment flows | [`0x779Ded0c9e1022225f8E0630b35a9b54bE713736`](https://www.okx.com/web3/explorer/xlayer/address/0x779Ded0c9e1022225f8E0630b35a9b54bE713736) |
+
+The frontend reads these addresses from `lib/contracts.js`.
+
 ## Claude agent brain
 
 Put your Claude key in `.env.local`:

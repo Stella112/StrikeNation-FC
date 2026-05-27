@@ -4,9 +4,9 @@
   "private": true,
   "description": "World Cup AI-agent FanDAO arena on X Layer.",
   "scripts": {
-    "dev": "next dev -p 5173",
+    "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start -p 5173",
+    "start": "next start -p 3000",
     "static": "node server.js",
     "compile": "node scripts/compile.js",
     "wallet:create": "node scripts/create-wallet.js",

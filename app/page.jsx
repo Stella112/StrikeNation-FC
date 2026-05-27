@@ -1,6 +1,5 @@
-import StrikeNationApp from "./strikenation-app";
+import LandingPage from "./landing-page";
 
 export default function Page() {
-  return <StrikeNationApp />;
+  return <LandingPage />;
 }
-

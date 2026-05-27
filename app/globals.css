@@ -130,6 +130,16 @@ html.dark {
   100%      { opacity: 0; transform: translateY(-50%) scaleX(0); }
 }
 
+@keyframes stickBob {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+  50% { transform: translate(-50%, -52%) rotate(-2deg); }
+}
+
+@keyframes stickRun {
+  0%, 100% { transform: rotate(18deg); }
+  50% { transform: rotate(-18deg); }
+}
+
 /* ── RESET ── */
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -145,6 +155,91 @@ body {
   /* Space for fixed ticker */
   padding-top: 32px;
 }
+
+/* ── MATCH SIM PITCH ── */
+.pitch-sim {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pitch) 18%, transparent) 0%, transparent 12%, color-mix(in srgb, var(--pitch) 18%, transparent) 24%, transparent 36%, color-mix(in srgb, var(--pitch) 18%, transparent) 48%, transparent 60%, color-mix(in srgb, var(--pitch) 18%, transparent) 72%, transparent 84%, color-mix(in srgb, var(--pitch) 18%, transparent) 96%),
+    linear-gradient(0deg, color-mix(in srgb, var(--pitch) 20%, transparent) 0%, transparent 100%);
+  background-color: color-mix(in srgb, var(--pitch) 18%, transparent);
+}
+
+/* ── STICK FIGURE PLAYERS ── */
+.stick-player {
+  width: 18px;
+  height: 26px;
+  animation: stickBob 1.1s ease-in-out infinite;
+}
+
+.stick-home { --stick-color: var(--primary); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--primary) 55%, transparent)); }
+.stick-away { --stick-color: var(--foreground); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--foreground) 35%, transparent)); }
+
+.stick-head {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--stick-color);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: transparent;
+}
+
+.stick-body {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 2px;
+  height: 10px;
+  background: var(--stick-color);
+  transform: translateX(-50%);
+}
+
+.stick-arms {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 12px;
+  height: 2px;
+  transform: translateX(-50%);
+}
+
+.stick-arms::before,
+.stick-arms::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 7px;
+  height: 2px;
+  background: var(--stick-color);
+}
+
+.stick-arms::before { left: 0; transform: rotate(-18deg); }
+.stick-arms::after { right: 0; transform: rotate(18deg); }
+
+.stick-legs {
+  position: absolute;
+  top: 17px;
+  left: 50%;
+  width: 12px;
+  height: 10px;
+  transform: translateX(-50%);
+}
+
+.stick-legs::before,
+.stick-legs::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 10px;
+  background: var(--stick-color);
+  transform-origin: top center;
+  animation: stickRun 0.7s ease-in-out infinite;
+}
+
+.stick-legs::before { left: 3px; }
+.stick-legs::after { right: 3px; animation-delay: 0.35s; }
 
 button, input, select { font: inherit; }
 button { cursor: pointer; }

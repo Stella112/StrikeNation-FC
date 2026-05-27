@@ -70,7 +70,7 @@ function generateSquad(isOpponent) {
   }));
 }
 
-export function MatchSimulation({ onComplete }) {
+export function MatchSimulation({ onComplete = () => {}, preview = false, result = null }) {
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [matchMinutes, setMatchMinutes] = useState(0); // 0 to 90
   const [homeScore, setHomeScore] = useState(0);
@@ -88,7 +88,6 @@ export function MatchSimulation({ onComplete }) {
   const simulationStartTime = useRef(Date.now());
 
   const TOTAL_SIM_SECONDS = 60; // Total real-world seconds
-  const isDev = process.env.NODE_ENV === "development";
 
   const addCommentary = (text, type = "normal", timeOverride = null) => {
     setCommentary(prev => {
@@ -118,9 +117,31 @@ export function MatchSimulation({ onComplete }) {
       setMatchMinutes(currentMinute);
 
       if (totalElapsed >= TOTAL_SIM_SECONDS) {
-        // Match over
+        if (result) {
+          setHomeScore(result.scoreUser);
+          setAwayScore(result.scoreAgent);
+        }
+
         playWhistle("fulltime");
-        addCommentary("FULL TIME! The match is over. Hashing final state to X Layer...", "info", 90);
+        addCommentary(
+          preview ? "FULL TIME. Arena preview resets for the next tactical read." : "FULL TIME! Final state confirmed from X Layer.",
+          "info",
+          90,
+        );
+
+        if (preview) {
+          setTimeout(() => {
+            simulationStartTime.current = Date.now();
+            lastUpdateRef.current = Date.now();
+            setMatchMinutes(0);
+            setHomeScore(0);
+            setAwayScore(0);
+            setCommentary([{ time: 0, text: "Arena preview restarted. Agents are moving into shape.", type: "info" }]);
+            requestRef.current = requestAnimationFrame(updateLoop);
+          }, 2200);
+          return;
+        }
+
         setTimeout(onComplete, 3000);
         return; // stop loop
       }
@@ -207,7 +228,7 @@ export function MatchSimulation({ onComplete }) {
         </div>
         <div className="text-center flex flex-col items-center">
           <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground animate-pulse mb-1">
-            Match Live
+            {preview ? "Arena Preview" : "Match Live"}
           </span>
           <span className="font-display text-3xl md:text-4xl text-primary font-bold">
             {matchMinutes}'
@@ -221,10 +242,14 @@ export function MatchSimulation({ onComplete }) {
 
       <div className="grid md:grid-cols-[1fr_300px] gap-6">
         {/* Pitch Area */}
-        <div className="relative aspect-[4/3] bg-pitch/10 border border-pitch/30 rounded-sm overflow-hidden flex items-center justify-center">
+        <div className="pitch-sim relative aspect-[4/3] border border-pitch/30 rounded-sm overflow-hidden flex items-center justify-center">
           <div className="absolute inset-4 border-2 border-pitch/40 pointer-events-none"></div>
           <div className="absolute inset-x-4 top-1/2 h-px bg-pitch/40 pointer-events-none"></div>
           <div className="absolute left-1/2 top-1/2 size-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-pitch/40 pointer-events-none md:size-28"></div>
+          <div className="absolute inset-x-10 top-4 h-16 border-x-2 border-b-2 border-pitch/40 pointer-events-none md:h-24"></div>
+          <div className="absolute inset-x-10 bottom-4 h-16 border-x-2 border-t-2 border-pitch/40 pointer-events-none md:h-24"></div>
+          <div className="absolute left-1/2 top-4 h-8 w-20 -translate-x-1/2 border-2 border-pitch/40 pointer-events-none md:h-10 md:w-28"></div>
+          <div className="absolute left-1/2 bottom-4 h-8 w-20 -translate-x-1/2 border-2 border-pitch/40 pointer-events-none md:h-10 md:w-28"></div>
           
           {/* Big Live Event Overlay */}
           {liveEvent && (
@@ -237,20 +262,30 @@ export function MatchSimulation({ onComplete }) {
 
           {/* Home Players */}
           {homeSquad.map(p => (
-            <div 
+            <div
               key={p.id}
-              className="absolute size-3 rounded-full bg-primary border border-background shadow-[0_0_8px_rgba(255,51,102,0.6)] transition-all duration-500 ease-linear"
+              className="stick-player stick-home absolute transition-all duration-500 ease-linear"
               style={{ left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)' }}
-            />
+            >
+              <span className="stick-head" />
+              <span className="stick-body" />
+              <span className="stick-arms" />
+              <span className="stick-legs" />
+            </div>
           ))}
 
           {/* Away Players */}
           {awaySquad.map(p => (
-            <div 
+            <div
               key={p.id}
-              className="absolute size-3 rounded-full bg-foreground border border-background shadow-md transition-all duration-500 ease-linear"
+              className="stick-player stick-away absolute transition-all duration-500 ease-linear"
               style={{ left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)' }}
-            />
+            >
+              <span className="stick-head" />
+              <span className="stick-body" />
+              <span className="stick-arms" />
+              <span className="stick-legs" />
+            </div>
           ))}
 
           {/* Ball */}
@@ -286,12 +321,6 @@ export function MatchSimulation({ onComplete }) {
           </div>
         </div>
       </div>
-
-      {isDev && (
-        <button onClick={onComplete} className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground hover:text-foreground underline">
-          [Dev Only] Skip to Result
-        </button>
-      )}
 
     </div>
   );

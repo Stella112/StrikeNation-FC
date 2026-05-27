@@ -122,6 +122,12 @@ export default function QuickBattlePage() {
         </div>
       )}
 
+      {step < 4 && (
+        <div className="mb-8">
+          <MatchSimulation preview onComplete={() => {}} />
+        </div>
+      )}
+
       {step === 1 && (
         <div className="space-y-6">
           <h2 className="font-display text-2xl uppercase italic">Select AI Opponent</h2>

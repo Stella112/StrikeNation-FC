@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { keccak256, stringToHex } from "viem";
+import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { agentAbi, contracts, explorerTx } from "@/lib/contracts";
 
 const players = [
   { id: 1, name: "Wall Keeper", role: "GK", rating: 87, type: "Reactive Sweeper", pos: { left: "50%", top: "85%" }, img: "https://api.dicebear.com/7.x/avataaars/svg?seed=gk" },
@@ -46,8 +49,42 @@ function PitchAgentCard({ player }) {
 }
 
 export default function SquadPage() {
+  const { address, isConnected } = useAccount();
+  const { writeContractAsync, isPending } = useWriteContract();
   const [formation, setFormation] = useState("4-3-3 Attack");
   const [mentality, setMentality] = useState("Balanced");
+  const [hash, setHash] = useState();
+  const [error, setError] = useState("");
+  const { data: hasSquad, refetch } = useReadContract({
+    address: contracts.StrikeAgentNFT,
+    abi: agentAbi,
+    functionName: "hasMintedSquad",
+    args: address ? [address] : undefined,
+    query: { enabled: Boolean(address) },
+  });
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  async function mintSquad() {
+    setError("");
+    if (!isConnected) {
+      setError("Connect OKX Wallet first.");
+      return;
+    }
+
+    try {
+      const promptHash = keccak256(stringToHex(`squad:${address}:${formation}:${mentality}`));
+      const txHash = await writeContractAsync({
+        address: contracts.StrikeAgentNFT,
+        abi: agentAbi,
+        functionName: "createSquad",
+        args: ["Nigeria Strike Squad", 1, `${formation} / ${mentality}`, promptHash],
+      });
+      setHash(txHash);
+      refetch();
+    } catch (err) {
+      setError(err?.shortMessage || err?.message || "Squad transaction rejected.");
+    }
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
@@ -59,10 +96,26 @@ export default function SquadPage() {
             Deploy your 11 Strike Agents on X Layer
           </p>
         </div>
-        <button className="bg-primary text-primary-foreground font-mono text-[10px] uppercase tracking-widest font-bold px-5 py-3 rounded-sm hover:opacity-90">
-          Save Tactics to Wallet
+        <button
+          disabled={hasSquad || isPending || isConfirming}
+          onClick={mintSquad}
+          className="bg-primary text-primary-foreground font-mono text-[10px] uppercase tracking-widest font-bold px-5 py-3 rounded-sm hover:opacity-90 disabled:opacity-50"
+        >
+          {hasSquad ? "Squad Minted On X Layer" : isPending || isConfirming ? "Minting Squad..." : "Mint Squad On X Layer"}
         </button>
       </div>
+
+      {(error || hash || isSuccess) && (
+        <div className="border border-border bg-card p-4 font-mono text-[10px] uppercase tracking-widest">
+          {error && <p className="text-destructive">{error}</p>}
+          {hash && (
+            <a className="text-primary underline" href={explorerTx(hash)} target="_blank" rel="noreferrer">
+              View squad transaction
+            </a>
+          )}
+          {isSuccess && <p className="mt-2 text-success">Confirmed on X Layer.</p>}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[1fr_350px] gap-8">
         

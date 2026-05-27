@@ -25,8 +25,8 @@ export default function FanDAOPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-border pb-2">
             <h2 className="font-display text-2xl uppercase italic">Active Proposals</h2>
-            <button className="bg-primary text-primary-foreground font-mono text-[9px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-sm hover:opacity-90">
-              Create Proposal
+            <button disabled className="bg-muted text-muted-foreground font-mono text-[9px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-sm cursor-not-allowed">
+              Governance Coming Soon
             </button>
           </div>
 
@@ -52,10 +52,10 @@ export default function FanDAOPage() {
               </div>
 
               <div className="flex gap-2">
-                <button className="flex-1 bg-success/10 text-success border border-success/20 font-mono text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-sm hover:bg-success hover:text-success-foreground transition-colors">Vote Yes</button>
-                <button className="flex-1 bg-destructive/10 text-destructive border border-destructive/20 font-mono text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-sm hover:bg-destructive hover:text-destructive-foreground transition-colors">Vote No</button>
+                <button disabled className="flex-1 bg-muted text-muted-foreground border border-border font-mono text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-sm cursor-not-allowed">Vote Yes</button>
+                <button disabled className="flex-1 bg-muted text-muted-foreground border border-border font-mono text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-sm cursor-not-allowed">Vote No</button>
               </div>
-              <p className="mt-3 text-center font-mono text-[9px] text-muted-foreground">Your voting power: 245 Votes (Based on Passport XP)</p>
+              <p className="mt-3 text-center font-mono text-[9px] text-muted-foreground">FanDAO governance is roadmap; passport and battle points are live on-chain today.</p>
             </div>
 
             {/* Proposal 2 */}
@@ -77,8 +77,8 @@ export default function FanDAOPage() {
             <h3 className="font-display text-xl uppercase italic mb-1">Your Fan Passport</h3>
             <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-4">Level 12 • 2,450 XP</div>
             <div className="w-full bg-background border border-border py-2 font-mono text-xs mb-4">0x4F...9A21</div>
-            <button className="w-full border border-primary text-primary font-mono text-[10px] uppercase tracking-widest font-bold px-4 py-2 hover:bg-primary hover:text-primary-foreground">
-              Upgrade Passport
+            <button disabled className="w-full border border-border text-muted-foreground font-mono text-[10px] uppercase tracking-widest font-bold px-4 py-2 cursor-not-allowed">
+              Evolution From Battles
             </button>
           </div>
 

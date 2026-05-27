@@ -34,6 +34,11 @@ function shortHash(hash) {
   return `${hash.slice(0, 8)}...${hash.slice(-6)}`;
 }
 
+function shortAddress(address) {
+  if (!address) return "unknown";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 function formatAge(timestamp) {
   if (!timestamp) return "recent";
   const seconds = Math.max(0, Math.floor(Date.now() / 1000 - Number(timestamp)));
@@ -45,7 +50,7 @@ function formatAge(timestamp) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function TransactionHistory({ limit = 8, title = "Transaction History", compact = false }) {
+export function TransactionHistory({ limit = 8, title = "Transaction History", compact = false, scope = "wallet" }) {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const [rows, setRows] = useState([]);
@@ -55,18 +60,23 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
 
   async function loadTransactions() {
     setError("");
-    if (!publicClient || !address) return;
+    if (!publicClient || (scope === "wallet" && !address)) return;
 
     setLoading(true);
     try {
       const latest = await publicClient.getBlockNumber();
-      const fromBlock = latest > 500000n ? latest - 500000n : 0n;
+      const fromBlock = latest > 1500000n ? latest - 1500000n : 0n;
       const safeLogs = async (params) => {
-        try {
-          return await publicClient.getLogs({ ...params, fromBlock, toBlock: "latest" });
-        } catch {
-          return [];
+        const chunk = 50000n;
+        const chunks = [];
+        for (let start = fromBlock; start <= latest; start += chunk + 1n) {
+          const end = start + chunk > latest ? latest : start + chunk;
+          chunks.push([start, end]);
         }
+        const settled = await Promise.allSettled(
+          chunks.map(([start, end]) => publicClient.getLogs({ ...params, fromBlock: start, toBlock: end })),
+        );
+        return settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
       };
 
       const [
@@ -92,77 +102,78 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
       ]);
 
       const isWallet = (value) => value?.toLowerCase?.() === lowerAddress;
-      const passportMints = passportLogs.filter((log) => isWallet(log.args.to) && log.args.from?.toLowerCase?.() === zeroAddress);
-      const squadMints = squadLogs.filter((log) => isWallet(log.args.owner));
-      const agentBattles = agentBattleLogs.filter((log) => isWallet(log.args.player));
-      const pvpCreated = pvpCreatedLogs.filter((log) => isWallet(log.args.playerA));
-      const pvpJoined = pvpJoinedLogs.filter((log) => isWallet(log.args.playerB));
-      const pvpSettledWins = pvpSettledLogs.filter((log) => isWallet(log.args.winner));
-      const marketIntents = marketIntentLogs.filter((log) => isWallet(log.args.proposer));
-      const liveMarkets = liveMarketLogs.filter((log) => isWallet(log.args.creator));
-      const liveStakes = liveStakeLogs.filter((log) => isWallet(log.args.player));
+      const walletOnly = scope === "wallet";
+      const passportMints = passportLogs.filter((log) => log.args.from?.toLowerCase?.() === zeroAddress && (!walletOnly || isWallet(log.args.to)));
+      const squadMints = squadLogs.filter((log) => !walletOnly || isWallet(log.args.owner));
+      const agentBattles = agentBattleLogs.filter((log) => !walletOnly || isWallet(log.args.player));
+      const pvpCreated = pvpCreatedLogs.filter((log) => !walletOnly || isWallet(log.args.playerA));
+      const pvpJoined = pvpJoinedLogs.filter((log) => !walletOnly || isWallet(log.args.playerB));
+      const pvpSettledWins = pvpSettledLogs.filter((log) => !walletOnly || isWallet(log.args.winner));
+      const marketIntents = marketIntentLogs.filter((log) => !walletOnly || isWallet(log.args.proposer));
+      const liveMarkets = liveMarketLogs.filter((log) => !walletOnly || isWallet(log.args.creator));
+      const liveStakes = liveStakeLogs.filter((log) => !walletOnly || isWallet(log.args.player));
 
       const activity = [
         ...passportMints.map((log) => ({
           type: "Fan Passport",
           label: `Minted passport #${log.args.tokenId.toString()}`,
-          detail: "FanPassportNFT Transfer to your wallet",
+          detail: `FanPassportNFT mint to ${shortAddress(log.args.to)}`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
         ...squadMints.map((log) => ({
           type: "Strike Squad",
           label: `Minted 11 agents #${log.args.firstAgentId.toString()}-${log.args.lastAgentId.toString()}`,
-          detail: "StrikeAgentNFT squad mint",
+          detail: `StrikeAgentNFT squad mint by ${shortAddress(log.args.owner)}`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
         ...agentBattles.map((log) => ({
           type: "Quick Battle",
           label: `${log.args.won ? "Won" : "Lost"} ${Number(log.args.scoreUser)}-${Number(log.args.scoreAgent)}`,
-          detail: `AgentMatchSettled, +${log.args.points.toString()} points`,
+          detail: `AgentMatchSettled by ${shortAddress(log.args.player)}, +${log.args.points.toString()} points`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
         ...pvpCreated.map((log) => ({
           type: "PvP",
           label: `Created match #${log.args.matchId.toString()}`,
-          detail: "CourtMatchCreated",
+          detail: `CourtMatchCreated by ${shortAddress(log.args.playerA)}`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
         ...pvpJoined.map((log) => ({
           type: "PvP",
           label: `Joined match #${log.args.matchId.toString()}`,
-          detail: "CourtMatchJoined",
+          detail: `CourtMatchJoined by ${shortAddress(log.args.playerB)}`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
         ...pvpSettledWins.map((log) => ({
           type: "PvP Result",
           label: `Won match #${log.args.matchId.toString()} ${Number(log.args.scoreA)}-${Number(log.args.scoreB)}`,
-          detail: `CourtMatchSettled, +${log.args.winnerPoints.toString()} points`,
+          detail: `CourtMatchSettled winner ${shortAddress(log.args.winner)}, +${log.args.winnerPoints.toString()} points`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
         ...marketIntents.map((log) => ({
           type: "Market Intent",
           label: `Posted intent #${log.args.intentId.toString()}`,
-          detail: log.args.question,
+          detail: `${shortAddress(log.args.proposer)}: ${log.args.question}`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
         ...liveMarkets.map((log) => ({
           type: "Live Market",
           label: `Posted ${log.args.homeTeam} vs ${log.args.awayTeam}`,
-          detail: log.args.question,
+          detail: `${shortAddress(log.args.creator)}: ${log.args.question}`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
         ...liveStakes.map((log) => ({
           type: "Live Stake",
           label: `Staked on market #${log.args.marketId.toString()}`,
-          detail: `Pick ${Number(log.args.pick)} / amount ${log.args.amount.toString()} USDT0 units`,
+          detail: `${shortAddress(log.args.player)} pick ${Number(log.args.pick)} / amount ${log.args.amount.toString()} USDT0 units`,
           blockNumber: log.blockNumber,
           transactionHash: log.transactionHash,
         })),
@@ -204,7 +215,7 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
         <div>
           <h2 className="font-display text-2xl uppercase italic">{title}</h2>
           <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            Real wallet activity from X Layer contracts
+            {scope === "global" ? "Total arena activity from X Layer contracts" : "Real wallet activity from X Layer contracts"}
           </p>
         </div>
         <button onClick={loadTransactions} className="border border-border bg-background px-3 py-2 font-mono text-[9px] uppercase tracking-widest hover:bg-muted">
@@ -212,11 +223,13 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
         </button>
       </div>
 
-      {!isConnected && <p className="text-sm text-muted-foreground">Connect OKX Wallet to load your profile transactions.</p>}
+      {!isConnected && scope === "wallet" && <p className="text-sm text-muted-foreground">Connect OKX Wallet to load your profile transactions.</p>}
       {error && <p className="border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
       {loading && <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Reading X Layer logs...</p>}
-      {!loading && isConnected && rows.length === 0 && (
-        <p className="text-sm text-muted-foreground">No recent StrikeNation transactions found for this wallet yet.</p>
+      {!loading && (scope === "global" || isConnected) && rows.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          {scope === "global" ? "No recent arena events found in the indexed X Layer window yet." : "No recent StrikeNation transactions found for this wallet yet."}
+        </p>
       )}
 
       <div className="space-y-3">

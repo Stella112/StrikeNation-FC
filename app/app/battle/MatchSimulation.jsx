@@ -240,7 +240,7 @@ export function MatchSimulation({ onComplete = () => {}, preview = false, result
         </div>
       </div>
 
-      <div className="grid md:grid-cols-[1fr_300px] gap-6">
+      <div className="match-broadcast-grid grid gap-6">
         {/* Pitch Area */}
         <div className="pitch-sim relative aspect-[4/3] border border-pitch/30 rounded-sm overflow-hidden flex items-center justify-center">
           <div className="absolute inset-4 border-2 border-pitch/40 pointer-events-none"></div>

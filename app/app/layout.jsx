@@ -2,13 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAccount, useDisconnect } from "wagmi";
+import { useState } from "react";
+import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { xLayer } from "@/lib/contracts";
 import { Providers } from "../providers";
 
 export function DashboardLayout({ children }) {
   const pathname = usePathname();
-  const { address, isConnected } = useAccount();
+  const { address, chainId, isConnected } = useAccount();
+  const { connectAsync, connectors, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
+  const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
+  const [walletError, setWalletError] = useState("");
+  const isXLayer = chainId === xLayer.id;
 
   const navigation = [
     { name: "Home", href: "/app" },
@@ -23,10 +29,37 @@ export function DashboardLayout({ children }) {
     { name: "World Cup", href: "/app/worldcup" },
   ];
 
+  async function connectWallet() {
+    setWalletError("");
+    try {
+      const connector =
+        connectors.find((item) => item.name.toLowerCase().includes("okx")) ||
+        connectors.find((item) => item.name.toLowerCase().includes("injected")) ||
+        connectors[0];
+
+      if (!connector) {
+        setWalletError("No wallet found. Unlock OKX Wallet, then refresh.");
+        return;
+      }
+
+      await connectAsync({ connector, chainId: xLayer.id });
+    } catch (error) {
+      setWalletError(error?.shortMessage || error?.message || "Wallet connection was cancelled.");
+    }
+  }
+
+  async function switchToXLayer() {
+    setWalletError("");
+    try {
+      await switchChainAsync({ chainId: xLayer.id });
+    } catch (error) {
+      setWalletError(error?.shortMessage || error?.message || "Could not switch to X Layer.");
+    }
+  }
+
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
-      {/* Left Sidebar */}
-      <aside className="w-64 flex-shrink-0 border-r border-border bg-card flex flex-col hidden md:flex">
+      <aside className="w-64 flex-shrink-0 border-r border-border bg-card flex-col hidden md:flex">
         <div className="h-16 flex items-center px-6 border-b border-border">
           <Link href="/" className="flex items-center gap-2">
             <span className="font-display text-xl uppercase italic leading-none tracking-tight">
@@ -55,46 +88,69 @@ export function DashboardLayout({ children }) {
         </nav>
       </aside>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Bar */}
         <header className="h-16 flex-shrink-0 border-b border-border bg-card/50 backdrop-blur-md flex items-center justify-between px-4 sm:px-6 z-10">
           <div className="flex items-center gap-4">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-success hidden sm:inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse"></span>
-              X LAYER CONNECTED
+            <span
+              className={`font-mono text-[10px] uppercase tracking-widest hidden sm:inline-flex items-center gap-1.5 ${
+                isConnected && isXLayer ? "text-success" : "text-muted-foreground"
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  isConnected && isXLayer ? "bg-success animate-pulse" : "bg-muted-foreground"
+                }`}
+              ></span>
+              {isConnected ? (isXLayer ? "X Layer Connected" : "Wrong Network") : "Wallet Not Connected"}
             </span>
+            {walletError && <span className="hidden lg:inline text-[10px] font-mono uppercase tracking-widest text-destructive">{walletError}</span>}
           </div>
+
           <div className="flex items-center gap-4 sm:gap-6">
             <div className="hidden sm:flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              <span>🇳🇬 Nigeria FanDAO</span>
-              <span>•</span>
-              <span className="text-primary">Passport Verified</span>
-              <span>•</span>
+              <span>NG Nigeria FanDAO</span>
+              <span>/</span>
+              <span className={isConnected ? "text-primary" : "text-muted-foreground"}>{isConnected ? "Wallet Verified" : "Connect Wallet"}</span>
+              <span>/</span>
               <span>2,450 XP</span>
             </div>
+
             {isConnected ? (
-              <button 
-                onClick={() => disconnect()}
-                className="font-mono text-[10px] uppercase tracking-widest border border-border px-3 py-1.5 rounded-sm hover:bg-destructive hover:text-destructive-foreground transition-colors"
-              >
-                {address?.slice(0,6)}...{address?.slice(-4)}
-              </button>
+              <div className="flex items-center gap-2">
+                {!isXLayer && (
+                  <button
+                    onClick={switchToXLayer}
+                    disabled={isSwitching}
+                    className="font-mono text-[10px] uppercase tracking-widest bg-primary text-primary-foreground px-3 py-1.5 rounded-sm hover:opacity-90 transition-opacity disabled:opacity-60"
+                  >
+                    {isSwitching ? "Switching..." : "Switch X Layer"}
+                  </button>
+                )}
+                <button
+                  onClick={() => disconnect()}
+                  className="font-mono text-[10px] uppercase tracking-widest border border-border px-3 py-1.5 rounded-sm hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                  title="Disconnect wallet"
+                >
+                  {address?.slice(0, 6)}...{address?.slice(-4)}
+                </button>
+              </div>
             ) : (
-              <button className="font-mono text-[10px] uppercase tracking-widest bg-primary text-primary-foreground px-3 py-1.5 rounded-sm hover:opacity-90 transition-opacity">
-                Connect Wallet
+              <button
+                onClick={connectWallet}
+                disabled={isConnecting}
+                className="font-mono text-[10px] uppercase tracking-widest bg-primary text-primary-foreground px-3 py-1.5 rounded-sm hover:opacity-90 transition-opacity disabled:opacity-60"
+              >
+                {isConnecting ? "Connecting..." : "Connect Wallet"}
               </button>
             )}
+
             <div className="h-8 w-8 rounded-full bg-muted border border-border overflow-hidden">
               <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=adekunle" alt="Avatar" className="h-full w-full object-cover" />
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
@@ -107,4 +163,3 @@ export default function WrappedDashboardLayout({ children }) {
     </Providers>
   );
 }
-

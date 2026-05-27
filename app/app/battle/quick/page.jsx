@@ -7,17 +7,30 @@ import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteCont
 import { MatchSimulation } from "../MatchSimulation";
 import { agentAbi, arenaAbi, contracts, explorerTx } from "@/lib/contracts";
 
-const opponents = [
-  { id: 2, name: "Brazil AI", difficulty: "Hard", reward: "Higher Points", desc: "Creative pressure and late overloads." },
-  { id: 3, name: "Argentina AI", difficulty: "Medium", reward: "Normal Points", desc: "Calm finishing and possession control." },
-  { id: 6, name: "Japan AI", difficulty: "Technical", reward: "Tempo Bonus", desc: "Fast rotations and tactical discipline." },
+const countries = [
+  { id: 1, code: "NG", name: "Nigeria", difficulty: "Home", reward: "Practice Points", desc: "Underdog speed and direct pressure." },
+  { id: 2, code: "BR", name: "Brazil", difficulty: "Hard", reward: "Higher Points", desc: "Creative pressure and late overloads." },
+  { id: 3, code: "AR", name: "Argentina", difficulty: "Medium", reward: "Normal Points", desc: "Calm finishing and possession control." },
+  { id: 4, code: "EN", name: "England", difficulty: "Set Piece", reward: "Tactical Points", desc: "Dead-ball pressure and physical duels." },
+  { id: 5, code: "UD", name: "Underdog", difficulty: "Random", reward: "Chaos Bonus", desc: "Unpredictable agents and risky counters." },
+  { id: 6, code: "JP", name: "Japan", difficulty: "Technical", reward: "Tempo Bonus", desc: "Fast rotations and tactical discipline." },
+  { id: 7, code: "KR", name: "South Korea", difficulty: "Press", reward: "Press Bonus", desc: "High pressing and rapid transitions." },
+  { id: 8, code: "SA", name: "Saudi Arabia", difficulty: "Counter", reward: "Counter Bonus", desc: "Deep blocks and sudden forward runs." },
+  { id: 9, code: "QA", name: "Qatar", difficulty: "Host Nerve", reward: "Composure Points", desc: "Compact defense and patient buildup." },
+  { id: 10, code: "IR", name: "Iran", difficulty: "Defensive", reward: "Block Bonus", desc: "Low block, aerial strength, and counters." },
+  { id: 11, code: "AU", name: "Australia", difficulty: "Physical", reward: "Duel Bonus", desc: "Strong duels and early crosses." },
+  { id: 12, code: "ID", name: "Indonesia", difficulty: "Rising", reward: "Momentum Bonus", desc: "High crowd energy and quick wide play." },
+  { id: 13, code: "IN", name: "India", difficulty: "Rising", reward: "Crowd Bonus", desc: "Patient buildup and long-range attempts." },
+  { id: 14, code: "CN", name: "China", difficulty: "Pressure", reward: "Structure Bonus", desc: "Organized pressure and central overloads." },
 ];
 
 export default function QuickBattlePage() {
   const { address, isConnected } = useAccount();
   const { writeContractAsync, isPending } = useWriteContract();
   const [step, setStep] = useState(1);
-  const [opponent, setOpponent] = useState(opponents[0]);
+  const [opponent, setOpponent] = useState(countries[1]);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [selectedPool, setSelectedPool] = useState([2]);
   const [recommendation, setRecommendation] = useState(null);
   const [hash, setHash] = useState();
   const [error, setError] = useState("");
@@ -33,6 +46,20 @@ export default function QuickBattlePage() {
 
   const { data: receipt, isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
   const agentId = useMemo(() => (squad?.length ? squad[0] : undefined), [squad]);
+  const filteredCountries = useMemo(
+    () =>
+      countries.filter((country) =>
+        `${country.code} ${country.name} ${country.desc}`.toLowerCase().includes(countrySearch.toLowerCase()),
+      ),
+    [countrySearch],
+  );
+
+  function toggleCountry(country) {
+    setOpponent(country);
+    setSelectedPool((current) =>
+      current.includes(country.id) ? current.filter((id) => id !== country.id) : [...current, country.id],
+    );
+  }
 
   useEffect(() => {
     if (!isSuccess || !receipt) return;
@@ -62,7 +89,7 @@ export default function QuickBattlePage() {
       body: JSON.stringify({
         agentName: "Naija Finisher",
         country: "Nigeria",
-        opponent: opponent.name,
+        opponent: `${opponent.name} AI`,
         playstyle: "4-3-3 AI Captain",
         record: "on-chain squad",
       }),
@@ -85,7 +112,7 @@ export default function QuickBattlePage() {
 
     const power = Math.max(40, Math.min(100, Number(recommendation?.power || 78)));
     const strategyHash = keccak256(
-      stringToHex(`quick:${address}:${agentId.toString()}:${opponent.id}:${power}:${Date.now()}`),
+      stringToHex(`quick:${address}:${agentId.toString()}:${opponent.id}:${selectedPool.join("-")}:${power}:${Date.now()}`),
     );
 
     try {
@@ -110,6 +137,19 @@ export default function QuickBattlePage() {
         </p>
       </div>
 
+      <div className="mb-8 grid md:grid-cols-2 gap-4">
+        <div className="border border-primary bg-primary/10 p-5">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-primary mb-2">Agent Mode</p>
+          <h2 className="font-display text-2xl uppercase italic mb-2">Battle AI Country Squad</h2>
+          <p className="text-sm text-muted-foreground">Select one or more rival countries. Claude reads the pool; the on-chain battle settles against the active rival.</p>
+        </div>
+        <Link href="/app/battle/pvp" className="border border-border bg-card p-5 hover:border-secondary transition-colors">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-secondary mb-2">PvP Challenge</p>
+          <h2 className="font-display text-2xl uppercase italic mb-2">Wallet vs Wallet</h2>
+          <p className="text-sm text-muted-foreground">Create or join a real two-wallet court match on X Layer.</p>
+        </Link>
+      </div>
+
       {(error || hash) && (
         <div className="mb-6 border border-border bg-card p-4 font-mono text-[10px] uppercase tracking-widest">
           {error && <p className="text-destructive">{error}</p>}
@@ -124,23 +164,40 @@ export default function QuickBattlePage() {
 
       {step === 1 && (
         <div className="space-y-6">
-          <h2 className="font-display text-2xl uppercase italic">Select AI Opponent</h2>
-          <div className="grid sm:grid-cols-3 gap-4">
-            {opponents.map((item) => (
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-2xl uppercase italic">Select Rival Country</h2>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                Active rival: {opponent.code} {opponent.name} / Pool: {selectedPool.length} countries
+              </p>
+            </div>
+            <input
+              value={countrySearch}
+              onChange={(event) => setCountrySearch(event.target.value)}
+              className="w-full md:w-80 border border-border bg-background px-4 py-3 font-mono text-[10px] uppercase tracking-widest"
+              placeholder="Search country"
+            />
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCountries.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setOpponent(item)}
-                className={`text-left p-5 border transition-colors ${opponent.id === item.id ? "border-primary bg-primary/10" : "border-border bg-card hover:border-foreground/50"}`}
+                onClick={() => toggleCountry(item)}
+                className={`text-left p-5 border transition-colors ${opponent.id === item.id ? "border-primary bg-primary/10" : selectedPool.includes(item.id) ? "border-secondary bg-secondary/10" : "border-border bg-card hover:border-foreground/50"}`}
               >
-                <h3 className="font-display text-xl uppercase italic mb-1">{item.name}</h3>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="font-display text-xl uppercase italic mb-1">{item.name} AI</h3>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-primary">{item.code}</span>
+                </div>
                 <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground mb-4">{item.difficulty}</div>
                 <p className="text-xs mb-4">{item.desc}</p>
                 <div className="font-mono text-[10px] uppercase tracking-widest text-success">{item.reward}</div>
               </button>
             ))}
           </div>
-          <button onClick={() => setStep(2)} className="bg-primary text-primary-foreground font-mono text-xs uppercase tracking-widest font-bold px-8 py-3 rounded-sm">
-            Choose Opponent
+          <button disabled={!selectedPool.length} onClick={() => setStep(2)} className="bg-primary text-primary-foreground font-mono text-xs uppercase tracking-widest font-bold px-8 py-3 rounded-sm disabled:opacity-50">
+            Continue With Agent Mode
           </button>
         </div>
       )}
@@ -165,7 +222,8 @@ export default function QuickBattlePage() {
           <div className="grid md:grid-cols-2 gap-6">
             <div className="border border-border bg-card p-6">
               <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Opponent</div>
-              <div className="font-display text-2xl uppercase italic mb-6">{opponent.name}</div>
+              <div className="font-display text-2xl uppercase italic mb-6">{opponent.name} AI</div>
+              <div className="font-mono text-[10px] uppercase tracking-widest mb-2">Country Pool: {selectedPool.length}</div>
               <div className="font-mono text-[10px] uppercase tracking-widest">Agent ID: {agentId ? agentId.toString() : "Mint squad first"}</div>
               <div className="font-mono text-[10px] uppercase tracking-widest mt-2">Network: X Layer Mainnet</div>
             </div>
@@ -192,7 +250,7 @@ export default function QuickBattlePage() {
               {result?.won ? "Victory" : "Full Time"}
             </h2>
             <div className="font-display text-4xl">
-              Nigeria {result?.scoreUser ?? "-"} - {result?.scoreAgent ?? "-"} {opponent.name}
+              Nigeria {result?.scoreUser ?? "-"} - {result?.scoreAgent ?? "-"} {opponent.name} AI
             </div>
           </div>
           <div className="max-w-2xl mx-auto border border-primary/20 bg-primary/5 p-6 text-left">

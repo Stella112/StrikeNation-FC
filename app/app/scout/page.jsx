@@ -1,36 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+
+const countries = [
+  { code: "NG", name: "Nigeria", style: "Underdog speed", weakness: "open midfield after counters" },
+  { code: "BR", name: "Brazil", style: "Creative pressure", weakness: "left channel recovery" },
+  { code: "AR", name: "Argentina", style: "Calm finishers", weakness: "wide overloads" },
+  { code: "EN", name: "England", style: "Set-piece machine", weakness: "slow pivots under press" },
+  { code: "UD", name: "Underdog", style: "Chaos market", weakness: "volatile defensive shape" },
+  { code: "JP", name: "Japan", style: "Technical tempo", weakness: "aerial duels" },
+  { code: "KR", name: "South Korea", style: "High press engine", weakness: "space behind fullbacks" },
+  { code: "SA", name: "Saudi Arabia", style: "Counter strike", weakness: "deep block fatigue" },
+  { code: "QA", name: "Qatar", style: "Host nation nerve", weakness: "central transitions" },
+  { code: "IR", name: "Iran", style: "Defensive wall", weakness: "late pressure switches" },
+  { code: "AU", name: "Australia", style: "Physical duels", weakness: "short passing traps" },
+  { code: "ID", name: "Indonesia", style: "Rising crowd", weakness: "set-piece marking" },
+  { code: "IN", name: "India", style: "Rising crowd", weakness: "press resistance" },
+  { code: "CN", name: "China", style: "Pressure build", weakness: "quick diagonal balls" },
+];
 
 export default function ScoutMarketplacePage() {
   const [purchased, setPurchased] = useState(false);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
   const [reportData, setReportData] = useState(null);
+  const [query, setQuery] = useState("");
 
-  const reports = [
-    {
-      id: "rep-1",
-      title: "Brazil Tactical Breakdown",
-      cost: "x402",
-      desc: "Deep analysis of Brazil's FanDAO squad. Weaknesses in the left channel identified by Claude Sonnet.",
-      author: "x402 AI Scout",
-    },
-    {
-      id: "rep-2",
-      title: "Underdog Chaos Patterns",
-      cost: "x402",
-      desc: "Identify unpredictable AI patterns from the Underdog team before a high-risk match.",
-      author: "x402 AI Scout",
-    },
-    {
-      id: "rep-3",
-      title: "England Set-Piece Flaws",
-      cost: "x402",
-      desc: "A breakdown of England set-piece routines before a wallet-vs-wallet challenge.",
-      author: "Premium Analyst",
-    },
-  ];
+  const reports = useMemo(
+    () =>
+      countries
+        .map((country) => ({
+          id: country.code,
+          title: `${country.name} Tactical Report`,
+          cost: "x402",
+          desc: `${country.name} FanDAO plays with ${country.style}. Claude scout focuses on ${country.weakness}.`,
+          author: country.code,
+          country,
+        }))
+        .filter((report) =>
+          `${report.country.code} ${report.country.name} ${report.country.style} ${report.country.weakness}`
+            .toLowerCase()
+            .includes(query.toLowerCase()),
+        ),
+    [query],
+  );
 
   async function purchaseReport(report) {
     setLoading(report.id);
@@ -65,22 +78,30 @@ export default function ScoutMarketplacePage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl uppercase italic mb-2">Scout Marketplace</h1>
           <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-            Premium intelligence is protected by the x402 payment boundary.
+            Search country scout reports protected by the x402 payment boundary.
           </p>
         </div>
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="w-full md:w-80 border border-border bg-background px-4 py-3 font-mono text-[10px] uppercase tracking-widest"
+          placeholder="Search country"
+        />
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {reports.map((report) => (
           <div key={report.id} className="border border-border bg-card p-6 flex flex-col justify-between group hover:border-primary/50 transition-colors">
             <div>
               <div className="flex items-center justify-between mb-4">
-                <span className="bg-muted px-2 py-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground rounded-sm">{report.author}</span>
+                <span className="bg-muted px-2 py-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground rounded-sm">
+                  {report.author} AI Scout
+                </span>
                 <span className="font-display text-xl text-primary">{report.cost}</span>
               </div>
               <h3 className="font-display text-2xl uppercase italic mb-3">{report.title}</h3>
@@ -95,6 +116,12 @@ export default function ScoutMarketplacePage() {
           </div>
         ))}
       </div>
+
+      {!reports.length && (
+        <div className="border border-border bg-card p-5 text-sm text-muted-foreground">
+          No country report matches that search.
+        </div>
+      )}
 
       {error && (
         <div className="mt-8 border border-primary/30 bg-primary/5 p-6 font-mono text-[10px] uppercase tracking-widest text-primary">

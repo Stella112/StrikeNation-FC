@@ -123,6 +123,19 @@ export default function QuickBattlePage() {
         args: [agentId, opponent.id, strategyHash, power, recommendation?.marketMove !== "NO"],
       });
       setHash(txHash);
+      if (typeof window !== "undefined") {
+        const key = "strikenation:recent-history";
+        const cached = JSON.parse(window.localStorage.getItem(key) || "[]");
+        const row = {
+          type: "Quick Battle",
+          label: `Battle vs ${opponent.name} AI submitted`,
+          detail: `${address?.slice(0, 6)}...${address?.slice(-4)} sent battleAgent to StrikeNationArena`,
+          transactionHash: txHash,
+          wallet: address,
+          createdAt: Date.now(),
+        };
+        window.localStorage.setItem(key, JSON.stringify([row, ...cached].slice(0, 20)));
+      }
     } catch (err) {
       setError(err?.shortMessage || err?.message || "Battle transaction rejected.");
     }

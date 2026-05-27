@@ -29,6 +29,7 @@ const liveStakeEvent = parseAbiItem(
   "event LiveMatchStakePlaced(uint256 indexed marketId,address indexed player,uint8 indexed pick,uint256 amount,uint256 totalStaked)",
 );
 const zeroAddress = "0x0000000000000000000000000000000000000000";
+const localHistoryKey = "strikenation:recent-history";
 
 function shortHash(hash) {
   return `${hash.slice(0, 8)}...${hash.slice(-6)}`;
@@ -50,6 +51,35 @@ function formatAge(timestamp) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function withTimeout(promise, ms = 8000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("RPC request timed out")), ms);
+    }),
+  ]);
+}
+
+function readLocalHistory(scope, lowerAddress) {
+  if (typeof window === "undefined") return [];
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(localHistoryKey) || "[]");
+    return cached
+      .filter((row) => scope === "global" || row.wallet?.toLowerCase?.() === lowerAddress)
+      .map((row) => ({
+        type: row.type || "Recent Battle",
+        label: row.label || "Battle transaction submitted",
+        detail: row.detail || "Waiting for X Layer event indexing",
+        transactionHash: row.transactionHash,
+        blockNumber: BigInt(row.blockNumber || 0),
+        age: "just now",
+        localOnly: true,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export function TransactionHistory({ limit = 8, title = "Transaction History", compact = false, scope = "wallet" }) {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
@@ -64,17 +94,22 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
 
     setLoading(true);
     try {
+      const localRows = readLocalHistory(scope, lowerAddress);
+      if (localRows.length) setRows(localRows.slice(0, limit));
+
       const latest = await publicClient.getBlockNumber();
-      const fromBlock = latest > 1500000n ? latest - 1500000n : 0n;
+      const fromBlock = latest > 250000n ? latest - 250000n : 0n;
       const safeLogs = async (params) => {
-        const chunk = 50000n;
+        const chunk = 10000n;
         const chunks = [];
         for (let start = fromBlock; start <= latest; start += chunk + 1n) {
           const end = start + chunk > latest ? latest : start + chunk;
           chunks.push([start, end]);
         }
         const settled = await Promise.allSettled(
-          chunks.map(([start, end]) => publicClient.getLogs({ ...params, fromBlock: start, toBlock: end })),
+          chunks
+            .reverse()
+            .map(([start, end]) => withTimeout(publicClient.getLogs({ ...params, fromBlock: start, toBlock: end }), 7000)),
         );
         return settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
       };
@@ -192,13 +227,25 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
       );
 
       setRows(
-        activity.slice(0, limit).map((row) => ({
-          ...row,
-          age: formatAge(blockMap.get(row.blockNumber.toString())),
-        })),
+        [
+          ...activity.slice(0, limit).map((row) => ({
+            ...row,
+            age: formatAge(blockMap.get(row.blockNumber.toString())),
+          })),
+          ...localRows,
+        ]
+          .filter((row) => row.transactionHash)
+          .filter((row, index, all) => all.findIndex((item) => item.transactionHash === row.transactionHash && item.label === row.label) === index)
+          .slice(0, limit),
       );
     } catch (err) {
-      setError(err?.shortMessage || err?.message || "Could not load wallet transaction history.");
+      const localRows = readLocalHistory(scope, lowerAddress);
+      if (localRows.length) {
+        setRows(localRows.slice(0, limit));
+        setError("Showing recent local activity while X Layer log indexing catches up.");
+      } else {
+        setError(err?.shortMessage || err?.message || "Could not load wallet transaction history.");
+      }
     } finally {
       setLoading(false);
     }
@@ -240,10 +287,11 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
                 <div className="font-mono text-[9px] uppercase tracking-widest text-primary">{row.type}</div>
                 <strong className="block text-sm mt-1">{row.label}</strong>
                 <p className="text-xs text-muted-foreground mt-1">{row.detail}</p>
+                {row.localOnly && <p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-accent">Local receipt fallback / waiting for RPC logs</p>}
               </div>
               <div className="text-left sm:text-right">
                 <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-                  {row.age} / block {row.blockNumber.toString()}
+                  {row.age} {row.blockNumber ? `/ block ${row.blockNumber.toString()}` : ""}
                 </div>
                 <a href={explorerTx(row.transactionHash)} target="_blank" rel="noreferrer" className="font-mono text-[9px] uppercase tracking-widest text-primary hover:underline">
                   Tx {shortHash(row.transactionHash)}

@@ -46,6 +46,7 @@ const liveMarketEvent = parseAbiItem(
 const liveStakeEvent = parseAbiItem(
   "event LiveMatchStakePlaced(uint256 indexed marketId,address indexed player,uint8 indexed pick,uint256 amount,uint256 totalStaked)",
 );
+const localHistoryKey = "strikenation:recent-history";
 
 function formatPoints(value) {
   return Number(value || 0n).toLocaleString();
@@ -71,6 +72,32 @@ function emptyManager(address) {
     passports: 0,
     lastBlock: 0n,
   };
+}
+
+function withTimeout(promise, ms = 6500) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("RPC request timed out")), ms);
+    }),
+  ]);
+}
+
+function applyLocalManagers(managers) {
+  if (typeof window === "undefined") return;
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(localHistoryKey) || "[]");
+    cached.forEach((entry) => {
+      const wallet = entry.wallet;
+      const key = wallet?.toLowerCase?.();
+      if (!key) return;
+      if (!managers.has(key)) managers.set(key, emptyManager(wallet));
+      const row = managers.get(key);
+      row.points += 1n;
+      row.matches += 1;
+      row.countryId ||= 1;
+    });
+  } catch {}
 }
 
 export default function LeaderboardPage() {
@@ -113,35 +140,31 @@ export default function LeaderboardPage() {
 
     try {
       const latest = await publicClient.getBlockNumber();
-      const fromBlock = latest > 1500000n ? latest - 1500000n : 0n;
+      const fromBlock = latest > 75000n ? latest - 75000n : 0n;
       const safeLogs = async (params) => {
-        const chunk = 50000n;
+        const chunk = 5000n;
         const chunks = [];
         for (let start = fromBlock; start <= latest; start += chunk + 1n) {
           const end = start + chunk > latest ? latest : start + chunk;
           chunks.push([start, end]);
         }
         const settled = await Promise.allSettled(
-          chunks.map(([start, end]) => publicClient.getLogs({ ...params, fromBlock: start, toBlock: end })),
+          chunks
+            .slice(-8)
+            .reverse()
+            .map(([start, end]) => withTimeout(publicClient.getLogs({ ...params, fromBlock: start, toBlock: end }))),
         );
-        const rejected = settled.find((item) => item.status === "rejected");
-        if (rejected && settled.every((item) => item.status === "rejected")) {
-          throw rejected.reason;
-        }
         return settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
       };
 
-      const [squadLogs, agentBattleLogs, pvpCreatedLogs, pvpJoinedLogs, pvpSettledLogs, marketIntentLogs, liveMarketLogs, liveStakeLogs] =
-        await Promise.all([
-          safeLogs({ address: contracts.StrikeAgentNFT, event: squadEvent }),
-          safeLogs({ address: contracts.StrikeNationArena, event: agentBattleEvent }),
-          safeLogs({ address: contracts.StrikeNationArena, event: pvpCreatedEvent }),
-          safeLogs({ address: contracts.StrikeNationArena, event: pvpJoinedEvent }),
-          safeLogs({ address: contracts.StrikeNationArena, event: pvpSettledEvent }),
-          safeLogs({ address: contracts.StrikeNationArena, event: marketIntentEvent }),
-          safeLogs({ address: contracts.StrikeNationArena, event: liveMarketEvent }),
-          safeLogs({ address: contracts.StrikeNationArena, event: liveStakeEvent }),
-        ]);
+      const squadLogs = await safeLogs({ address: contracts.StrikeAgentNFT, event: squadEvent });
+      const agentBattleLogs = await safeLogs({ address: contracts.StrikeNationArena, event: agentBattleEvent });
+      const pvpCreatedLogs = await safeLogs({ address: contracts.StrikeNationArena, event: pvpCreatedEvent });
+      const pvpJoinedLogs = await safeLogs({ address: contracts.StrikeNationArena, event: pvpJoinedEvent });
+      const pvpSettledLogs = await safeLogs({ address: contracts.StrikeNationArena, event: pvpSettledEvent });
+      const marketIntentLogs = await safeLogs({ address: contracts.StrikeNationArena, event: marketIntentEvent });
+      const liveMarketLogs = await safeLogs({ address: contracts.StrikeNationArena, event: liveMarketEvent });
+      const liveStakeLogs = await safeLogs({ address: contracts.StrikeNationArena, event: liveStakeEvent });
 
       const managers = new Map();
       const pvp = new Map();
@@ -234,6 +257,8 @@ export default function LeaderboardPage() {
         touch(row, log.blockNumber);
       });
 
+      applyLocalManagers(managers);
+
       const rows = Array.from(managers.values())
         .filter((row) => row.points > 0n || row.passports || row.matches)
         .sort((a, b) => {
@@ -244,8 +269,15 @@ export default function LeaderboardPage() {
         .map((row, index) => ({ ...row, rank: index + 1 }));
 
       setManagerRows(rows);
+      if (!rows.length) {
+        setManagerError("No recent manager events found yet. The country board is live; manager rows appear after indexed wallet events.");
+      }
     } catch (err) {
-      setManagerError(err?.shortMessage || err?.message || "Could not load manager leaderboard from X Layer logs.");
+      const managers = new Map();
+      applyLocalManagers(managers);
+      const rows = Array.from(managers.values()).map((row, index) => ({ ...row, rank: index + 1 }));
+      setManagerRows(rows);
+      setManagerError(rows.length ? "Showing recent local manager activity while X Layer logs catch up." : err?.shortMessage || err?.message || "Could not load manager leaderboard from X Layer logs.");
     } finally {
       setManagerLoading(false);
     }

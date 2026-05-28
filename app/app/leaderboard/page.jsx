@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { parseAbiItem } from "viem";
 import { useAccount, usePublicClient, useReadContracts } from "wagmi";
-import { arenaAbi, contracts, explorerAddress } from "@/lib/contracts";
+import { agentAbi, arenaAbi, contracts, explorerAddress, passportAbi } from "@/lib/contracts";
 
 const countries = [
   { id: 1, country: "Nigeria", flag: "NG" },
@@ -100,6 +100,17 @@ function applyLocalManagers(managers) {
   } catch {}
 }
 
+function mergeManagerRows(rows) {
+  return Array.from(rows.values())
+    .filter((row) => row.points > 0n || row.passports || row.matches)
+    .sort((a, b) => {
+      const pointsDelta = Number(b.points - a.points);
+      if (pointsDelta) return pointsDelta;
+      return Number(b.lastBlock - a.lastBlock);
+    })
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
 export default function LeaderboardPage() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
@@ -120,6 +131,29 @@ export default function LeaderboardPage() {
     contracts: pointReads,
     query: { refetchInterval: 5000 },
   });
+
+  const { data: profileData } = useReadContracts({
+    contracts: address
+      ? [
+          {
+            address: contracts.FanPassportNFT,
+            abi: passportAbi,
+            functionName: "countryOf",
+            args: [address],
+          },
+          {
+            address: contracts.StrikeAgentNFT,
+            abi: agentAbi,
+            functionName: "squadOf",
+            args: [address],
+          },
+        ]
+      : [],
+    query: { enabled: Boolean(address), refetchInterval: 5000 },
+  });
+
+  const profileCountryId = Number(profileData?.[0]?.status === "success" ? profileData[0].result : 0);
+  const profileSquad = profileData?.[1]?.status === "success" ? profileData[1].result : [];
 
   const countryRows = useMemo(
     () =>
@@ -258,26 +292,34 @@ export default function LeaderboardPage() {
       });
 
       applyLocalManagers(managers);
+      if (address) {
+        const row = getManager(address);
+        row.countryId ||= profileCountryId || 1;
+        row.passports = profileCountryId ? 1 : row.passports;
+        row.points += profileSquad?.length ? 1n : 0n;
+      }
 
-      const rows = Array.from(managers.values())
-        .filter((row) => row.points > 0n || row.passports || row.matches)
-        .sort((a, b) => {
-          const pointsDelta = Number(b.points - a.points);
-          if (pointsDelta) return pointsDelta;
-          return Number(b.lastBlock - a.lastBlock);
-        })
-        .map((row, index) => ({ ...row, rank: index + 1 }));
+      const rows = mergeManagerRows(managers);
 
       setManagerRows(rows);
       if (!rows.length) {
-        setManagerError("No recent manager events found yet. The country board is live; manager rows appear after indexed wallet events.");
+        setManagerError("Manager logs are still syncing. Country totals remain live.");
       }
     } catch (err) {
       const managers = new Map();
       applyLocalManagers(managers);
-      const rows = Array.from(managers.values()).map((row, index) => ({ ...row, rank: index + 1 }));
+      if (address) {
+        const key = address.toLowerCase();
+        managers.set(key, {
+          ...emptyManager(address),
+          countryId: profileCountryId || 1,
+          passports: profileCountryId ? 1 : 0,
+          points: profileSquad?.length ? 1n : 0n,
+        });
+      }
+      const rows = mergeManagerRows(managers);
       setManagerRows(rows);
-      setManagerError(rows.length ? "Showing recent local manager activity while X Layer logs catch up." : err?.shortMessage || err?.message || "Could not load manager leaderboard from X Layer logs.");
+      setManagerError(rows.length ? "Showing your manager profile while X Layer event logs catch up." : "Manager logs are still syncing. Country totals remain live.");
     } finally {
       setManagerLoading(false);
     }
@@ -288,7 +330,7 @@ export default function LeaderboardPage() {
     const timer = setInterval(loadManagers, 15000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicClient]);
+  }, [publicClient, lowerAddress, profileCountryId, profileSquad?.length]);
 
   return (
     <div className="mx-auto max-w-[1560px] p-5 md:p-10 space-y-8">
@@ -398,7 +440,7 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      {managerError && <div className="border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{managerError}</div>}
+      {managerError && <div className="border border-border bg-card p-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{managerError}</div>}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { parseAbiItem } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
-import { contracts, explorerTx } from "@/lib/contracts";
+import { arenaAbi, contracts, explorerTx } from "@/lib/contracts";
 
 const transferEvent = parseAbiItem("event Transfer(address indexed from,address indexed to,uint256 indexed tokenId)");
 const squadEvent = parseAbiItem("event StrikeSquadMinted(address indexed owner,uint8 indexed country,uint256 firstAgentId,uint256 lastAgentId)");
@@ -30,6 +30,22 @@ const liveStakeEvent = parseAbiItem(
 );
 const zeroAddress = "0x0000000000000000000000000000000000000000";
 const localHistoryKey = "strikenation:recent-history";
+const countryNames = {
+  1: "Nigeria",
+  2: "Brazil",
+  3: "Argentina",
+  4: "England",
+  5: "Underdog",
+  6: "Japan",
+  7: "South Korea",
+  8: "Saudi Arabia",
+  9: "Qatar",
+  10: "Iran",
+  11: "Australia",
+  12: "Indonesia",
+  13: "India",
+  14: "China",
+};
 
 function shortHash(hash) {
   return `${hash.slice(0, 8)}...${hash.slice(-6)}`;
@@ -80,6 +96,97 @@ function readLocalHistory(scope, lowerAddress) {
   }
 }
 
+async function readRecentStateRows(publicClient, scope, lowerAddress, limit) {
+  try {
+    const [battleCount, courtMatchCount] = await Promise.all([
+      withTimeout(
+        publicClient.readContract({
+          address: contracts.StrikeNationArena,
+          abi: arenaAbi,
+          functionName: "battleCount",
+        }),
+        7000,
+      ),
+      withTimeout(
+        publicClient.readContract({
+          address: contracts.StrikeNationArena,
+          abi: arenaAbi,
+          functionName: "courtMatchCount",
+        }),
+        7000,
+      ),
+    ]);
+
+    const battleIds = [];
+    for (let id = battleCount; id > 0n && battleIds.length < limit; id -= 1n) battleIds.push(id);
+    const courtIds = [];
+    for (let id = courtMatchCount; id > 0n && courtIds.length < limit; id -= 1n) courtIds.push(id);
+
+    const [battles, courtMatches] = await Promise.all([
+      Promise.allSettled(
+        battleIds.map((id) =>
+          withTimeout(
+            publicClient.readContract({
+              address: contracts.StrikeNationArena,
+              abi: arenaAbi,
+              functionName: "battles",
+              args: [id],
+            }),
+            7000,
+          ).then((result) => ({ id, result })),
+        ),
+      ),
+      Promise.allSettled(
+        courtIds.map((id) =>
+          withTimeout(
+            publicClient.readContract({
+              address: contracts.StrikeNationArena,
+              abi: arenaAbi,
+              functionName: "courtMatches",
+              args: [id],
+            }),
+            7000,
+          ).then((result) => ({ id, result })),
+        ),
+      ),
+    ]);
+
+    const isWallet = (value) => value?.toLowerCase?.() === lowerAddress;
+    const walletOnly = scope === "wallet";
+    const quickRows = battles
+      .filter((item) => item.status === "fulfilled")
+      .map((item) => item.value)
+      .filter(({ result }) => result?.player && result.player !== zeroAddress && result.settled && (!walletOnly || isWallet(result.player)))
+      .map(({ id, result }) => ({
+        type: "Quick Battle",
+        label: `${result.won ? "Won" : "Lost"} battle #${id.toString()}`,
+        detail: `${shortAddress(result.player)}: ${countryNames[Number(result.country)] || `Country ${Number(result.country)}`} vs ${countryNames[Number(result.opponentCountry)] || `Country ${Number(result.opponentCountry)}`} / power ${Number(result.power)}`,
+        blockNumber: 0n,
+        transactionHash: "",
+        age: "on-chain state",
+        stateOnly: true,
+      }));
+
+    const courtRows = courtMatches
+      .filter((item) => item.status === "fulfilled")
+      .map((item) => item.value)
+      .filter(({ result }) => result?.playerA && result.playerA !== zeroAddress && (!walletOnly || isWallet(result.playerA) || isWallet(result.playerB) || isWallet(result.winner)))
+      .map(({ id, result }) => ({
+        type: result.settled ? "PvP Result" : "PvP",
+        label: result.settled ? `Match #${id.toString()} settled ${Number(result.scoreA)}-${Number(result.scoreB)}` : `Match #${id.toString()} waiting`,
+        detail: `${shortAddress(result.playerA)} vs ${result.playerB === zeroAddress ? "waiting" : shortAddress(result.playerB)}${result.winner && result.winner !== zeroAddress ? ` / winner ${shortAddress(result.winner)}` : ""}`,
+        blockNumber: 0n,
+        transactionHash: "",
+        age: "on-chain state",
+        stateOnly: true,
+      }));
+
+    return [...quickRows, ...courtRows].slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
 export function TransactionHistory({ limit = 8, title = "Transaction History", compact = false, scope = "wallet" }) {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
@@ -95,7 +202,8 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
     setLoading(true);
     try {
       const localRows = readLocalHistory(scope, lowerAddress);
-      if (localRows.length) setRows(localRows.slice(0, limit));
+      const stateRows = await readRecentStateRows(publicClient, scope, lowerAddress, limit);
+      if (localRows.length || stateRows.length) setRows([...localRows, ...stateRows].slice(0, limit));
 
       const latest = await publicClient.getBlockNumber();
       const fromBlock = latest > 250000n ? latest - 250000n : 0n;
@@ -233,18 +341,25 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
             age: formatAge(blockMap.get(row.blockNumber.toString())),
           })),
           ...localRows,
+          ...stateRows,
         ]
-          .filter((row) => row.transactionHash)
-          .filter((row, index, all) => all.findIndex((item) => item.transactionHash === row.transactionHash && item.label === row.label) === index)
+          .filter((row, index, all) =>
+            all.findIndex((item) =>
+              row.transactionHash
+                ? item.transactionHash === row.transactionHash && item.label === row.label
+                : item.label === row.label && item.detail === row.detail,
+            ) === index,
+          )
           .slice(0, limit),
       );
     } catch (err) {
       const localRows = readLocalHistory(scope, lowerAddress);
-      if (localRows.length) {
-        setRows(localRows.slice(0, limit));
-        setError("Showing recent local activity while X Layer log indexing catches up.");
+      const stateRows = await readRecentStateRows(publicClient, scope, lowerAddress, limit);
+      if (localRows.length || stateRows.length) {
+        setRows([...localRows, ...stateRows].slice(0, limit));
+        setError("Showing direct on-chain match state while X Layer event logs catch up.");
       } else {
-        setError(err?.shortMessage || err?.message || "Could not load wallet transaction history.");
+        setError("X Layer event logs are still syncing. Try Refresh in a moment.");
       }
     } finally {
       setLoading(false);
@@ -271,7 +386,7 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
       </div>
 
       {!isConnected && scope === "wallet" && <p className="text-sm text-muted-foreground">Connect OKX Wallet to load your profile transactions.</p>}
-      {error && <p className="border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+      {error && <p className="border border-border bg-background p-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{error}</p>}
       {loading && <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Reading X Layer logs...</p>}
       {!loading && (scope === "global" || isConnected) && rows.length === 0 && (
         <p className="text-sm text-muted-foreground">
@@ -288,14 +403,17 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
                 <strong className="block text-sm mt-1">{row.label}</strong>
                 <p className="text-xs text-muted-foreground mt-1">{row.detail}</p>
                 {row.localOnly && <p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-accent">Local receipt fallback / waiting for RPC logs</p>}
+                {row.stateOnly && <p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-accent">Read directly from contract state</p>}
               </div>
               <div className="text-left sm:text-right">
                 <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
                   {row.age} {row.blockNumber ? `/ block ${row.blockNumber.toString()}` : ""}
                 </div>
-                <a href={explorerTx(row.transactionHash)} target="_blank" rel="noreferrer" className="font-mono text-[9px] uppercase tracking-widest text-primary hover:underline">
-                  Tx {shortHash(row.transactionHash)}
-                </a>
+                {row.transactionHash ? (
+                  <a href={explorerTx(row.transactionHash)} target="_blank" rel="noreferrer" className="font-mono text-[9px] uppercase tracking-widest text-primary hover:underline">
+                    Tx {shortHash(row.transactionHash)}
+                  </a>
+                ) : null}
               </div>
             </div>
           </div>

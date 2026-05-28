@@ -46,7 +46,6 @@ const liveMarketEvent = parseAbiItem(
 const liveStakeEvent = parseAbiItem(
   "event LiveMatchStakePlaced(uint256 indexed marketId,address indexed player,uint8 indexed pick,uint256 amount,uint256 totalStaked)",
 );
-const localHistoryKey = "strikenation:recent-history";
 
 function formatPoints(value) {
   return Number(value || 0n).toLocaleString();
@@ -83,23 +82,6 @@ function withTimeout(promise, ms = 6500) {
   ]);
 }
 
-function applyLocalManagers(managers) {
-  if (typeof window === "undefined") return;
-  try {
-    const cached = JSON.parse(window.localStorage.getItem(localHistoryKey) || "[]");
-    cached.forEach((entry) => {
-      const wallet = entry.wallet;
-      const key = wallet?.toLowerCase?.();
-      if (!key) return;
-      if (!managers.has(key)) managers.set(key, emptyManager(wallet));
-      const row = managers.get(key);
-      row.points += 1n;
-      row.matches += 1;
-      row.countryId ||= 1;
-    });
-  } catch {}
-}
-
 function mergeManagerRows(rows) {
   return Array.from(rows.values())
     .filter((row) => row.points > 0n || row.passports || row.matches)
@@ -109,6 +91,28 @@ function mergeManagerRows(rows) {
       return Number(b.lastBlock - a.lastBlock);
     })
     .map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+function normalizeBattle(result) {
+  if (!result) return null;
+  return {
+    player: result.player ?? result[0],
+    country: result.country ?? result[2],
+    settled: result.settled ?? result[6],
+    won: result.won ?? result[7],
+  };
+}
+
+function normalizeCourtMatch(result) {
+  if (!result) return null;
+  return {
+    playerA: result.playerA ?? result[0],
+    playerB: result.playerB ?? result[1],
+    countryA: result.countryA ?? result[4],
+    countryB: result.countryB ?? result[5],
+    settled: result.settled ?? result[8],
+    winner: result.winner ?? result[11],
+  };
 }
 
 export default function LeaderboardPage() {
@@ -291,12 +295,99 @@ export default function LeaderboardPage() {
         touch(row, log.blockNumber);
       });
 
-      applyLocalManagers(managers);
+      const [battleCount, courtMatchCount] = await Promise.all([
+        withTimeout(
+          publicClient.readContract({
+            address: contracts.StrikeNationArena,
+            abi: arenaAbi,
+            functionName: "battleCount",
+          }),
+        ).catch(() => 0n),
+        withTimeout(
+          publicClient.readContract({
+            address: contracts.StrikeNationArena,
+            abi: arenaAbi,
+            functionName: "courtMatchCount",
+          }),
+        ).catch(() => 0n),
+      ]);
+
+      const battleIds = [];
+      for (let id = battleCount; id > 0n && battleIds.length < 25; id -= 1n) battleIds.push(id);
+      const courtIds = [];
+      for (let id = courtMatchCount; id > 0n && courtIds.length < 25; id -= 1n) courtIds.push(id);
+
+      const [stateBattles, stateCourts] = await Promise.all([
+        Promise.allSettled(
+          battleIds.map((id) =>
+            withTimeout(
+              publicClient.readContract({
+                address: contracts.StrikeNationArena,
+                abi: arenaAbi,
+                functionName: "battles",
+                args: [id],
+              }),
+            ),
+          ),
+        ),
+        Promise.allSettled(
+          courtIds.map((id) =>
+            withTimeout(
+              publicClient.readContract({
+                address: contracts.StrikeNationArena,
+                abi: arenaAbi,
+                functionName: "courtMatches",
+                args: [id],
+              }),
+            ),
+          ),
+        ),
+      ]);
+
+      stateBattles
+        .filter((item) => item.status === "fulfilled")
+        .map((item) => normalizeBattle(item.value))
+        .filter((battle) => battle?.player && battle.player !== "0x0000000000000000000000000000000000000000" && battle.settled)
+        .forEach((battle) => {
+          if (agentBattleLogs.length) return;
+          const row = getManager(battle.player);
+          if (!row) return;
+          row.countryId ||= Number(battle.country);
+          row.matches += 1;
+          if (battle.won) row.wins += 1;
+          row.points += battle.won ? 145n : 55n;
+        });
+
+      stateCourts
+        .filter((item) => item.status === "fulfilled")
+        .map((item) => normalizeCourtMatch(item.value))
+        .filter((match) => match?.playerA && match.playerA !== "0x0000000000000000000000000000000000000000")
+        .forEach((match) => {
+          if (pvpCreatedLogs.length || pvpJoinedLogs.length || pvpSettledLogs.length) return;
+          const playerA = getManager(match.playerA);
+          if (playerA) {
+            playerA.countryId ||= Number(match.countryA);
+            playerA.matches += match.settled ? 1 : 0;
+            const playerAWon = match.settled && match.winner?.toLowerCase?.() === match.playerA.toLowerCase();
+            if (playerAWon) playerA.wins += 1;
+            playerA.points += match.settled ? (playerAWon ? 180n : 70n) : 0n;
+          }
+          if (match.playerB && match.playerB !== "0x0000000000000000000000000000000000000000") {
+            const playerB = getManager(match.playerB);
+            if (playerB) {
+              playerB.countryId ||= Number(match.countryB);
+              playerB.matches += match.settled ? 1 : 0;
+              const playerBWon = match.settled && match.winner?.toLowerCase?.() === match.playerB.toLowerCase();
+              if (playerBWon) playerB.wins += 1;
+              playerB.points += match.settled ? (playerBWon ? 180n : 70n) : 0n;
+            }
+          }
+        });
+
       if (address) {
         const row = getManager(address);
         row.countryId ||= profileCountryId || 1;
         row.passports = profileCountryId ? 1 : row.passports;
-        row.points += profileSquad?.length ? 1n : 0n;
       }
 
       const rows = mergeManagerRows(managers);
@@ -307,14 +398,12 @@ export default function LeaderboardPage() {
       }
     } catch (err) {
       const managers = new Map();
-      applyLocalManagers(managers);
       if (address) {
         const key = address.toLowerCase();
         managers.set(key, {
           ...emptyManager(address),
           countryId: profileCountryId || 1,
           passports: profileCountryId ? 1 : 0,
-          points: profileSquad?.length ? 1n : 0n,
         });
       }
       const rows = mergeManagerRows(managers);

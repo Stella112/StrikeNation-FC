@@ -29,7 +29,6 @@ const liveStakeEvent = parseAbiItem(
   "event LiveMatchStakePlaced(uint256 indexed marketId,address indexed player,uint8 indexed pick,uint256 amount,uint256 totalStaked)",
 );
 const zeroAddress = "0x0000000000000000000000000000000000000000";
-const localHistoryKey = "strikenation:recent-history";
 const countryNames = {
   1: "Nigeria",
   2: "Brazil",
@@ -76,24 +75,36 @@ function withTimeout(promise, ms = 8000) {
   ]);
 }
 
-function readLocalHistory(scope, lowerAddress) {
-  if (typeof window === "undefined") return [];
-  try {
-    const cached = JSON.parse(window.localStorage.getItem(localHistoryKey) || "[]");
-    return cached
-      .filter((row) => scope === "global" || row.wallet?.toLowerCase?.() === lowerAddress)
-      .map((row) => ({
-        type: row.type || "Recent Battle",
-        label: row.label || "Battle transaction submitted",
-        detail: row.detail || "Waiting for X Layer event indexing",
-        transactionHash: row.transactionHash,
-        blockNumber: BigInt(row.blockNumber || 0),
-        age: "just now",
-        localOnly: true,
-      }));
-  } catch {
-    return [];
-  }
+function normalizeBattle(result) {
+  if (!result) return null;
+  return {
+    player: result.player ?? result[0],
+    agentId: result.agentId ?? result[1],
+    country: result.country ?? result[2],
+    opponentCountry: result.opponentCountry ?? result[3],
+    strategyHash: result.strategyHash ?? result[4],
+    power: result.power ?? result[5],
+    settled: result.settled ?? result[6],
+    won: result.won ?? result[7],
+  };
+}
+
+function normalizeCourtMatch(result) {
+  if (!result) return null;
+  return {
+    playerA: result.playerA ?? result[0],
+    playerB: result.playerB ?? result[1],
+    agentA: result.agentA ?? result[2],
+    agentB: result.agentB ?? result[3],
+    countryA: result.countryA ?? result[4],
+    countryB: result.countryB ?? result[5],
+    strategyA: result.strategyA ?? result[6],
+    strategyB: result.strategyB ?? result[7],
+    settled: result.settled ?? result[8],
+    scoreA: result.scoreA ?? result[9],
+    scoreB: result.scoreB ?? result[10],
+    winner: result.winner ?? result[11],
+  };
 }
 
 async function readRecentStateRows(publicClient, scope, lowerAddress, limit) {
@@ -155,7 +166,7 @@ async function readRecentStateRows(publicClient, scope, lowerAddress, limit) {
     const walletOnly = scope === "wallet";
     const quickRows = battles
       .filter((item) => item.status === "fulfilled")
-      .map((item) => item.value)
+      .map((item) => ({ ...item.value, result: normalizeBattle(item.value.result) }))
       .filter(({ result }) => result?.player && result.player !== zeroAddress && result.settled && (!walletOnly || isWallet(result.player)))
       .map(({ id, result }) => ({
         type: "Quick Battle",
@@ -169,7 +180,7 @@ async function readRecentStateRows(publicClient, scope, lowerAddress, limit) {
 
     const courtRows = courtMatches
       .filter((item) => item.status === "fulfilled")
-      .map((item) => item.value)
+      .map((item) => ({ ...item.value, result: normalizeCourtMatch(item.value.result) }))
       .filter(({ result }) => result?.playerA && result.playerA !== zeroAddress && (!walletOnly || isWallet(result.playerA) || isWallet(result.playerB) || isWallet(result.winner)))
       .map(({ id, result }) => ({
         type: result.settled ? "PvP Result" : "PvP",
@@ -201,9 +212,8 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
 
     setLoading(true);
     try {
-      const localRows = readLocalHistory(scope, lowerAddress);
       const stateRows = await readRecentStateRows(publicClient, scope, lowerAddress, limit);
-      if (localRows.length || stateRows.length) setRows([...localRows, ...stateRows].slice(0, limit));
+      if (stateRows.length) setRows(stateRows.slice(0, limit));
 
       const latest = await publicClient.getBlockNumber();
       const fromBlock = latest > 250000n ? latest - 250000n : 0n;
@@ -340,7 +350,6 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
             ...row,
             age: formatAge(blockMap.get(row.blockNumber.toString())),
           })),
-          ...localRows,
           ...stateRows,
         ]
           .filter((row, index, all) =>
@@ -353,10 +362,9 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
           .slice(0, limit),
       );
     } catch (err) {
-      const localRows = readLocalHistory(scope, lowerAddress);
       const stateRows = await readRecentStateRows(publicClient, scope, lowerAddress, limit);
-      if (localRows.length || stateRows.length) {
-        setRows([...localRows, ...stateRows].slice(0, limit));
+      if (stateRows.length) {
+        setRows(stateRows.slice(0, limit));
         setError("Showing direct on-chain match state while X Layer event logs catch up.");
       } else {
         setError("X Layer event logs are still syncing. Try Refresh in a moment.");
@@ -402,7 +410,6 @@ export function TransactionHistory({ limit = 8, title = "Transaction History", c
                 <div className="font-mono text-[9px] uppercase tracking-widest text-primary">{row.type}</div>
                 <strong className="block text-sm mt-1">{row.label}</strong>
                 <p className="text-xs text-muted-foreground mt-1">{row.detail}</p>
-                {row.localOnly && <p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-accent">Local receipt fallback / waiting for RPC logs</p>}
                 {row.stateOnly && <p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-accent">Read directly from contract state</p>}
               </div>
               <div className="text-left sm:text-right">

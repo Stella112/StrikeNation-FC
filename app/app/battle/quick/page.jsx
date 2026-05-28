@@ -35,6 +35,8 @@ export default function QuickBattlePage() {
   const [hash, setHash] = useState();
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [footballContext, setFootballContext] = useState(null);
+  const [agentNames, setAgentNames] = useState([]);
 
   const { data: squad = [] } = useReadContract({
     address: contracts.StrikeAgentNFT,
@@ -46,6 +48,7 @@ export default function QuickBattlePage() {
 
   const { data: receipt, isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
   const agentId = useMemo(() => (squad?.length ? squad[0] : undefined), [squad]);
+  const primaryAgentName = agentNames[9] || agentNames[0] || "Naija Finisher";
   const filteredCountries = useMemo(
     () =>
       countries.filter((country) =>
@@ -60,6 +63,37 @@ export default function QuickBattlePage() {
       current.includes(country.id) ? current.filter((id) => id !== country.id) : [...current, country.id],
     );
   }
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/football/context")
+      .then((response) => response.json())
+      .then((data) => {
+        if (active) setFootballContext(data);
+      })
+      .catch(() => {
+        if (active) setFootballContext(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(`strikenation:agent-names:${address || "guest"}`);
+    if (!saved) {
+      setAgentNames([]);
+      return;
+    }
+
+    try {
+      setAgentNames(JSON.parse(saved));
+    } catch {
+      setAgentNames([]);
+    }
+  }, [address]);
 
   useEffect(() => {
     if (!isSuccess || !receipt) return;
@@ -87,11 +121,13 @@ export default function QuickBattlePage() {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        agentName: "Naija Finisher",
+        agentName: primaryAgentName,
+        agentNames,
         country: "Nigeria",
         opponent: `${opponent.name} AI`,
         playstyle: "4-3-3 AI Captain",
         record: "on-chain squad",
+        fixtureContext: footballContext,
       }),
     });
     const data = await response.json();
@@ -135,6 +171,43 @@ export default function QuickBattlePage() {
         <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
           Real X Layer settlement first. 60-second broadcast after confirmation.
         </p>
+      </div>
+
+      <div className="mb-8 border border-border bg-card">
+        <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-primary mb-2">World Cup Signal</p>
+            <h2 className="font-display text-2xl uppercase italic">Upcoming Fixtures Feed</h2>
+            <p className="text-xs text-muted-foreground">
+              {footballContext?.source === "api-football"
+                ? "Live API-Football data is feeding Claude strategy."
+                : "Waiting for API-Football key; using safe World Cup preview context."}
+            </p>
+          </div>
+          <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            League {footballContext?.leagueId || "1"} / Season {footballContext?.season || "2026"}
+          </div>
+        </div>
+        <div className="border-t border-border overflow-hidden">
+          <div className="flex gap-6 whitespace-nowrap px-5 py-3 font-mono text-[10px] uppercase tracking-widest animate-[ticker_22s_linear_infinite]">
+            {(footballContext?.ticker || ["Loading World Cup fixtures..."]).map((item, index) => (
+              <span key={`${item}-${index}`}>{item}</span>
+            ))}
+          </div>
+        </div>
+        <div className="grid md:grid-cols-3 gap-px bg-border">
+          {(footballContext?.fixtures || []).slice(0, 3).map((fixture) => (
+            <div key={fixture.id} className="bg-card p-4">
+              <div className="font-display text-xl uppercase italic">
+                {fixture.home?.code || fixture.home?.name?.slice(0, 3)} vs {fixture.away?.code || fixture.away?.name?.slice(0, 3)}
+              </div>
+              <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground mt-2">
+                {fixture.round} / {fixture.status}
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">{fixture.venue}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="mb-8 grid md:grid-cols-2 gap-4">
@@ -241,7 +314,18 @@ export default function QuickBattlePage() {
         </div>
       )}
 
-      {step === 4 && <MatchSimulation result={result} onComplete={() => setStep(5)} />}
+      {step === 4 && (
+        <MatchSimulation
+          result={result}
+          homeCode="NGA"
+          homeName="Nigeria"
+          awayCode={opponent.code}
+          awayName={opponent.name}
+          agentNames={agentNames}
+          fixtureContext={footballContext}
+          onComplete={() => setStep(5)}
+        />
+      )}
 
       {step === 5 && (
         <div className="space-y-10 text-center py-8">

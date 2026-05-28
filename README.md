@@ -53,6 +53,9 @@ and profile anchor on X Layer.
 
 After minting a passport, each fan mints an 11-player Strike Agent squad. The
 squad represents the fan in matches and evolves through battle activity.
+Managers can rename all 11 agents in Squad Management; the names are stored per
+wallet in the app and sent into Claude so battle strategy and commentary use the
+manager's own squad identity.
 
 ### Quick Battle
 
@@ -67,6 +70,11 @@ watches a 60-second compressed football broadcast with:
 - whistle/audio cues
 - Claude-powered commentary
 - final score and X Layer transaction link
+
+The Arena also reads a server-side API-Football feed for upcoming World Cup
+fixtures and player notes. That football context is passed to Claude so the
+recommendation feels like a match desk using real fixture signals instead of a
+generic random call.
 
 ### Challenge Player
 
@@ -117,7 +125,8 @@ country scouting reports, opponent weakness reads, and tactical breakdowns.
 ## AI system
 
 StrikeNation uses Claude Sonnet as the agent brain. The app sends match context,
-country identity, opponent style, and recent state to the server-side agent API.
+country identity, opponent style, configurable squad names, API-Football fixture
+context, player notes, and recent state to the server-side agent API.
 Claude returns:
 
 - tactical recommendations
@@ -182,9 +191,14 @@ http://localhost:5173
 Create `.env.local`:
 
 ```text
-ANTHROPIC_API_KEY=your_claude_key
+CLAUDE_API_KEY=your_claude_key
 CLAUDE_MODEL=claude-sonnet-4-20250514
 CLAUDE_MAX_TOKENS=140
+
+API_FOOTBALL_KEY=your_api_sports_football_key
+API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
+API_FOOTBALL_WORLD_CUP_LEAGUE_ID=1
+API_FOOTBALL_SEASON=2026
 
 X402_PAY_TO_ADDRESS=your_receiving_wallet
 X402_PREMIUM_SCOUT_PRICE=$0.01

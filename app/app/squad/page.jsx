@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keccak256, stringToHex } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { agentAbi, contracts, explorerTx } from "@/lib/contracts";
 
-const players = [
+const defaultPlayers = [
   { id: 1, name: "Wall Keeper", role: "GK", rating: 87, type: "Reactive Sweeper", pos: { left: "50%", top: "85%" }, img: "https://api.dicebear.com/7.x/avataaars/svg?seed=gk" },
   { id: 3, name: "Iron", role: "LB", rating: 87, type: "Defensive Anchor", pos: { left: "20%", top: "70%" }, img: "https://api.dicebear.com/7.x/avataaars/svg?seed=iron" },
   { id: 4, name: "Stone", role: "CB", rating: 90, type: "Ball-playing", pos: { left: "40%", top: "73%" }, img: "https://api.dicebear.com/7.x/avataaars/svg?seed=stone" },
@@ -53,6 +52,8 @@ export default function SquadPage() {
   const { writeContractAsync, isPending } = useWriteContract();
   const [formation, setFormation] = useState("4-3-3 Attack");
   const [mentality, setMentality] = useState("Balanced");
+  const [agentNames, setAgentNames] = useState(() => defaultPlayers.map((player) => player.name));
+  const [saveMessage, setSaveMessage] = useState("");
   const [hash, setHash] = useState();
   const [error, setError] = useState("");
   const { data: hasSquad, refetch } = useReadContract({
@@ -63,6 +64,40 @@ export default function SquadPage() {
     query: { enabled: Boolean(address) },
   });
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const storageKey = useMemo(() => `strikenation:agent-names:${address || "guest"}`, [address]);
+  const players = useMemo(
+    () => defaultPlayers.map((player, index) => ({ ...player, name: agentNames[index] || player.name })),
+    [agentNames],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(storageKey);
+    if (!saved) {
+      setAgentNames(defaultPlayers.map((player) => player.name));
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(saved);
+      setAgentNames(defaultPlayers.map((player, index) => parsed[index] || player.name));
+    } catch {
+      setAgentNames(defaultPlayers.map((player) => player.name));
+    }
+  }, [storageKey]);
+
+  function updateAgentName(index, value) {
+    setSaveMessage("");
+    setAgentNames((current) => current.map((name, itemIndex) => (itemIndex === index ? value : name)));
+  }
+
+  function saveAgentNames() {
+    if (typeof window === "undefined") return;
+    const cleaned = defaultPlayers.map((player, index) => (agentNames[index] || player.name).trim() || player.name);
+    window.localStorage.setItem(storageKey, JSON.stringify(cleaned));
+    setAgentNames(cleaned);
+    setSaveMessage("Agent names saved for this wallet.");
+  }
 
   async function mintSquad() {
     setError("");
@@ -164,6 +199,20 @@ export default function SquadPage() {
           </div>
 
           <div className="bg-card border border-border p-5 rounded-sm">
+            <h3 className="font-display text-xl uppercase italic mb-2">Configurable Agents</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Rename all 11 Strike Agents for this wallet. Claude uses these names in battle strategy and commentary.
+            </p>
+            <button
+              onClick={saveAgentNames}
+              className="w-full bg-primary text-primary-foreground font-mono text-[10px] uppercase tracking-widest font-bold px-4 py-3 rounded-sm"
+            >
+              Save Agent Names
+            </button>
+            {saveMessage && <p className="mt-3 font-mono text-[10px] uppercase tracking-widest text-success">{saveMessage}</p>}
+          </div>
+
+          <div className="bg-card border border-border p-5 rounded-sm">
             <h3 className="font-display text-xl uppercase italic mb-4">AI Brain Weights</h3>
             <p className="text-xs text-muted-foreground mb-4">Adjust how your agents make decisions on-chain.</p>
             <div className="space-y-4">
@@ -197,12 +246,17 @@ export default function SquadPage() {
       <div className="bg-card border border-border p-5 rounded-sm">
         <h3 className="font-display text-xl uppercase italic mb-4">Roster</h3>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {players.map((p) => (
-            <div key={p.id} className="border border-border p-3 flex justify-between items-center bg-background hover:border-primary transition-colors cursor-pointer">
+          {players.map((p, index) => (
+            <div key={p.id} className="border border-border p-3 flex justify-between items-center bg-background hover:border-primary transition-colors">
               <div className="flex gap-3 items-center">
                 <span className="size-8 bg-muted border border-border flex items-center justify-center font-mono text-xs font-bold">{p.id}</span>
                 <div>
-                  <div className="font-display uppercase text-sm">{p.name}</div>
+                  <input
+                    value={agentNames[index] || ""}
+                    onChange={(event) => updateAgentName(index, event.target.value)}
+                    className="w-full bg-transparent border-b border-border font-display uppercase text-sm focus:outline-none focus:border-primary"
+                    aria-label={`Agent ${p.id} name`}
+                  />
                   <div className="font-mono text-[9px] text-muted-foreground uppercase">{p.role} • {p.type}</div>
                 </div>
               </div>

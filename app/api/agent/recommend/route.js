@@ -6,8 +6,8 @@ export async function POST(request) {
     power: 78,
     risk: "medium",
     marketMove: "YES",
-    reason: `${state.country || "Nigeria"} should use a controlled left shot and back the country market while momentum is favorable.`,
-    commentary: `${state.agentName || "Your Strike Agent"} steps up for ${state.country || "Nigeria"} with the nation watching.`,
+    reason: `${state.country || "Nigeria"} should attack the weak channel and back the country market while momentum is favorable.`,
+    commentary: `${state.agentName || "Your Strike Agent"} reads the fixture data and drives ${state.country || "Nigeria"} forward.`,
     source: "local-fallback",
   };
 
@@ -28,9 +28,13 @@ ${JSON.stringify({
   country: state.country,
   opponent: state.opponent,
   agentName: state.agentName,
+  agentNames: state.agentNames,
   playstyle: state.playstyle,
   record: state.record,
   marketOdds: state.marketOdds,
+  upcomingFixtures: state.fixtureContext?.fixtures?.slice?.(0, 4),
+  playerStats: state.fixtureContext?.playerStats?.slice?.(0, 8),
+  footballDataSource: state.fixtureContext?.source,
 })}
 `;
 

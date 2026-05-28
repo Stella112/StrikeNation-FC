@@ -70,7 +70,17 @@ function generateSquad(isOpponent) {
   }));
 }
 
-export function MatchSimulation({ onComplete = () => {}, preview = false, result = null }) {
+export function MatchSimulation({
+  onComplete = () => {},
+  preview = false,
+  result = null,
+  homeCode = "NGA",
+  awayCode = "AWY",
+  homeName = "Nigeria",
+  awayName = "Away",
+  agentNames = [],
+  fixtureContext = null,
+}) {
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [matchMinutes, setMatchMinutes] = useState(0); // 0 to 90
   const [homeScore, setHomeScore] = useState(0);
@@ -105,7 +115,14 @@ export function MatchSimulation({ onComplete = () => {}, preview = false, result
 
   useEffect(() => {
     playWhistle("kickoff");
-    addCommentary("Peep! We are underway in the X Layer Arena.", "info", 0);
+    const leadFixture = fixtureContext?.fixtures?.[0];
+    addCommentary(
+      leadFixture
+        ? `Peep! ${homeName} studies ${leadFixture.home?.name} vs ${leadFixture.away?.name} before kickoff.`
+        : "Peep! We are underway in the X Layer Arena.",
+      "info",
+      0,
+    );
 
     const updateLoop = () => {
       const now = Date.now();
@@ -176,12 +193,12 @@ export function MatchSimulation({ onComplete = () => {}, preview = false, result
             setHomeScore(s => s + 1);
             setLiveEvent("GOAL");
             playWhistle("kickoff");
-            addCommentary("GOOOAAALLL! Brilliant strike from Nigeria!", "goal");
+            addCommentary(`GOOOAAALLL! ${agentNames[9] || homeName} finishes for ${homeName}.`, "goal");
           } else {
             setAwayScore(s => s + 1);
             setLiveEvent("GOAL");
             playWhistle("kickoff");
-            addCommentary("GOAL! The away side finds the back of the net.", "goal");
+            addCommentary(`GOAL! ${awayName} breaks through and finds the net.`, "goal");
           }
           setTimeout(() => setLiveEvent(null), 3000);
         } else if (chance < 0.02) {
@@ -194,10 +211,10 @@ export function MatchSimulation({ onComplete = () => {}, preview = false, result
           triggerEvent("FREE KICK", "Foul given in a dangerous area.");
         } else if (chance < 0.06) {
           const events = [
-            "Good build-up play in the midfield.",
-            "Claude Engine detects an overlapping run on the right flank.",
+            `${homeName} strings passes through midfield.`,
+            `Claude Engine detects ${agentNames[10] || "the winger"} overlapping on the right flank.`,
             "Solid defensive block.",
-            "They're controlling possession well here.",
+            `${awayName} is trying to slow the tempo.`,
             "Keeper comes out to claim the cross easily."
           ];
           addCommentary(events[Math.floor(Math.random() * events.length)]);
@@ -223,7 +240,7 @@ export function MatchSimulation({ onComplete = () => {}, preview = false, result
       {/* Scoreboard */}
       <div className="flex items-center justify-between bg-card border border-border p-4 md:p-6 rounded-sm">
         <div className="flex items-center gap-4">
-          <span className="font-display text-2xl md:text-3xl uppercase italic">NGA</span>
+          <span className="font-display text-2xl md:text-3xl uppercase italic">{homeCode}</span>
           <span className="font-display text-4xl text-primary">{homeScore}</span>
         </div>
         <div className="text-center flex flex-col items-center">
@@ -236,7 +253,7 @@ export function MatchSimulation({ onComplete = () => {}, preview = false, result
         </div>
         <div className="flex items-center gap-4">
           <span className="font-display text-4xl">{awayScore}</span>
-          <span className="font-display text-2xl md:text-3xl uppercase italic">AWY</span>
+          <span className="font-display text-2xl md:text-3xl uppercase italic">{awayCode}</span>
         </div>
       </div>
 
